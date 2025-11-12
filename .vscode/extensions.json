@@ -1,0 +1,15 @@
+{
+	// Watch https://www.youtube.com/watch?v=vE0nAQPNtLQ and/or
+	// read https://go.microsoft.com/fwlink/?LinkId=827846 to learn about workspace recommendations.
+	"recommendations": [
+		"bradlc.vscode-tailwindcss",
+		"codezombiech.gitignore",
+		"dbaeumer.vscode-eslint",
+		"esbenp.prettier-vscode",
+		"file-icons.file-icons",
+		"github.vscode-github-actions",
+		"mikestead.dotenv",
+		"ms-playwright.playwright",
+		"svelte.svelte-vscode"
+	]
+}

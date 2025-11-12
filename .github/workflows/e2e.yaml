@@ -1,0 +1,30 @@
+name: End-to-End Tests (Production)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  e2e-production:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v3
+      - name: Install dependencies
+        run: pnpm install
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+      - name: Run E2E tests against production
+        run: pnpm test
+        env:
+          PUBLIC_ROOT_URL: https://min-or-max.j-e7c.workers.dev/
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: e2e-test-results
+          path: ./apps/web/test-results/
+          retention-days: 30

@@ -1,0 +1,12 @@
+pnpm-lock.yaml
+# Common build Outputs
+.vercel
+.next/
+out/
+build
+dist
+.svelte-kit/
+**/vite.config.ts.timestamp*
+pb_data/
+vector-pgdata/
+tests/auth/

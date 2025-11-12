@@ -1,0 +1,23 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"globalEnv": [
+		"MOCK_AUTH_SECRET",
+		"PUBLIC_GOOGLE_CLIENT_ID",
+		"GOOGLE_CLIENT_SECRET"
+	],
+	"globalDependencies": [".env", ".env.local", ".env.test"],
+	"tasks": {
+		"dev": {
+			"persistent": true,
+			"cache": false
+		},
+		"lint": {},
+		"test": {},
+		"check": {},
+		"codegen": {},
+		"build": {
+			"inputs": ["$TURBO_DEFAULT$", "**/.env*"],
+			"outputs": ["build/**"]
+		}
+	}
+}

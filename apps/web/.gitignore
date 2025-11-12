@@ -1,0 +1,27 @@
+.DS_Store
+node_modules
+/build
+/.svelte-kit
+/package
+.env
+.env.*
+!.env.test
+!.env.example
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# playwright auth credentials
+/tests/credentials/*
+
+# db
+*.db
+
+# build artifacts
+.vercel
+
+# src/lib is the default "common modules" directory in SvelteKit
+!lib/

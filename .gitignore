@@ -1,0 +1,33 @@
+test-results
+node_modules
+
+# Output
+.output
+.vercel
+.svelte-kit
+build
+.wrangler
+.turbo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+playwright-report/
+blob-report/
+playwright/.cache/
+
+certs
+
+# Claude Code
+.claude/settings.local.json
+_NOTES.md

@@ -1,0 +1,64 @@
+name: Quality Assurance for Web App
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/web/**']
+  pull_request:
+    branches: [main]
+    paths: ['apps/web/**']
+
+jobs:
+  sanity-check:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v3
+      - name: Install dependencies
+        run: pnpm install
+      - name: Type check with svelte-check
+        run: pnpm check
+      - name: Code quality check with oxlint
+        run: pnpm lint
+      - name: Confirm the app builds
+        run: pnpm build
+  browser-tests:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v3
+      - name: Install dependencies
+        run: pnpm install
+      - name: Build the app
+        run: pnpm build
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+      - name: Run Playwright tests
+        run: pnpm test
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: test-results
+          path: ./apps/web/test-results/
+          retention-days: 30
+  vitest-tests:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v3
+      - name: Install dependencies
+        run: pnpm install
+      - name: Run Vitest (unit/integration) tests
+        run: pnpm test:unit

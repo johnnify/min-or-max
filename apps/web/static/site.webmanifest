@@ -1,0 +1,14 @@
+{
+	"name": "Min or Max",
+	"short_name": "Min or Max",
+	"icons": [
+		{
+			"src": "/favicon.png",
+			"sizes": "128x128",
+			"type": "image/png"
+		}
+	],
+	"theme_color": "#ea4f36",
+	"background_color": "#0c0a09",
+	"display": "standalone"
+}
