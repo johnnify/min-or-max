@@ -1,6 +1,6 @@
 # Min or Max State
 
-Web app for Min or Max, implemented with XState!
+Game state management for Min or Max, implemented with XState!
 
 ## Notable tech
 
@@ -10,7 +10,7 @@ Web app for Min or Max, implemented with XState!
 
 ## Local development
 
-This package is not to be used by itself: Use it in either `/apps/web` or `/apps/server`!
+This package is not to be used by itself: Depend on it and use in another app or package!
 
 ### Install dependencies
 

@@ -1,18 +1,14 @@
 {
-	"name": "@repo/state",
+	"name": "@repo/rng",
 	"version": "0.0.1",
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts",
-		"./machine": "./src/machine.ts"
+		"./Rng": "./src/Rng.ts"
 	},
 	"scripts": {
 		"test": "vitest run",
 		"lint": "oxlint --type-aware"
-	},
-	"dependencies": {
-		"@repo/rng": "workspace:*",
-		"xstate": "catalog:"
 	},
 	"devDependencies": {
 		"@types/node": "catalog:",

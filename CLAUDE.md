@@ -15,8 +15,9 @@ Locally, the dev server is always running at http://localhost:5173/
 ### Monorepo Structure
 
 - `apps/web/` - Main SvelteKit application
-- `apps/server/` - Cloudflare Worker using Durable Objects to communicate game state
+- `apps/api/` - Cloudflare Worker using Durable Objects to communicate game state
 - `packages/state/` - State shared by web & server apps
+- `packages/rng/` - Utility for seeded randomness that can run on the server or browser
 
 ## Development Commands
 
@@ -125,6 +126,9 @@ Always prefer web standards, including using the `form` element for GET actions 
 - It will **NEVER** be a formatting issue.
 - As an LLM, you have difficulty telling curly apostrophes and straight apostrophes apart. **NEVER** try to change any type of code to another. If you think something is not compiling, you MUST ask the user for clarification.
 - If you add a new dependency, you **MUST** `pnpm up -r --latest` to confirm all dependencies are up to their latest versions.
+- You must NOT over-indulge with comments! If you find yourself writing comments, stop and think whether a better variable or function name would make the code clearer instead.
+- You must **NEVER** write comments which only explain the following line of code!
+- You MAY use comments, but reserve them for prefacing long chunks of logic that would be inconvenient to extract to an appropriately named function.
 
 ## QA
 
