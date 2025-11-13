@@ -112,6 +112,7 @@ game
 - `PLAYER_DROPPED` - A player leaves the lobby
 - `PLAYER_READY` - A player marks themselves as ready
 - `PLAYER_UNREADY` - A player unmarks ready
+- `SEED` - Initializes the RNG with a seed string (payload: `{seed: string}`)
 - `START_GAME` - Attempt to start the game
 
 **Guards:**
@@ -125,6 +126,7 @@ game
 - `players: Player[]` - List of players with id, name, isReady, hand
 - `minPlayers: 2`
 - `maxPlayers: 4`
+- `rng: Rng | null` - Seeded random number generator, initialized via `SEED` event
 
 ### Setup Machine (Child)
 
@@ -132,6 +134,7 @@ Initializes the game board and deals initial cards. Each step is discrete for su
 
 **States:**
 
+- `shufflingPile` - Shuffle the draw pile at the start of setup
 - `dealingCards` - Deal 3 cards to each player
 - `generatingThresholds` - RNG min threshold (e.g., -10 to -20) and max threshold (e.g., 30 to 50)
 - `spinningInitialWheel` - Wheel starts at 90° (middle of Max), then spins for visual flair
@@ -140,6 +143,8 @@ Initializes the game board and deals initial cards. Each step is discrete for su
 
 **Events:**
 
+- `SHUFFLE_PILE` - Shuffle a specific pile (payload: `{pile: 'draw' | 'discard'}`)
+- `PILE_SHUFFLED` - Pile shuffling complete
 - `CARDS_DEALT`
 - `THRESHOLDS_SET`
 - `WHEEL_SPUN` - Includes final angle after animation
@@ -172,6 +177,7 @@ Main gameplay loop where players take turns.
 playing
 └─ round (repeating until game over)
    ├─ turnStart
+   ├─ shufflingDrawPile (conditional)
    ├─ playerTurn (nested compound state)
    │  ├─ awaitingAction
    │  ├─ spinningWheel
@@ -186,8 +192,15 @@ playing
 
 **`turnStart`**
 
-- Auto-draw one card for current player
-- Transition to `playerTurn.awaitingAction`
+- Check if draw pile is empty
+  - If empty: move all cards from discard pile except the top card (card to beat) into draw pile, transition to `shufflingDrawPile`
+  - If not empty: auto-draw one card for current player, transition to `playerTurn.awaitingAction`
+
+**`shufflingDrawPile`**
+
+- Shuffle the draw pile after replenishing from discard pile
+- On `PILE_SHUFFLED`: draw one card for current player, transition to `playerTurn.awaitingAction`
+- Can also be triggered during gameplay by card effects that require shuffling the discard pile
 
 **`playerTurn.awaitingAction`**
 
@@ -244,7 +257,9 @@ playing
 
 **Events:**
 
-- `TURN_STARTED` - Auto-draw card
+- `TURN_STARTED` - Auto-draw card (or trigger shuffle if draw pile empty)
+- `SHUFFLE_PILE` - Shuffle a specific pile (payload: `{pile: 'draw' | 'discard'}`)
+- `PILE_SHUFFLED` - Pile shuffling complete, proceed with drawing card
 - `SPIN_WHEEL` - Player initiates wheel spin with `force: number` (0-1, subtle to hard)
 - `WHEEL_SPIN_COMPLETE` - Wheel animation finished, includes final `angle: number`
 - `CHOOSE_CARD` - Player chooses card with `cardId: string`
