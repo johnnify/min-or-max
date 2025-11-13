@@ -24,6 +24,7 @@
 		"@iconify/json": "^2.2.406",
 		"@internationalized/date": "^3.10.0",
 		"@playwright/test": "^1.56.1",
+		"@repo/state": "workspace:*",
 		"@sveltejs/adapter-cloudflare": "^7.2.4",
 		"@sveltejs/enhanced-img": "^0.8.4",
 		"@sveltejs/kit": "^2.48.4",

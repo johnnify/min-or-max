@@ -357,19 +357,164 @@ export const setupMachine = setup({
 	},
 })
 
+type PlayingInput = {
+	rng: Rng
+	players: Player[]
+	drawPile: Card[]
+	discardPile: Card[]
+	minThreshold: number
+	maxThreshold: number
+	wheelAngle: number
+	currentScore: number
+	currentPlayerIndex: number
+	hasSpunThisTurn: boolean
+}
+
+type PlayingContext = PlayingInput & {
+	chosenCard: Card | null
+	chosenCardEffect: {aceValue?: 1 | 11} | null
+}
+
+type PlayingEvents =
+	| {type: 'TURN_STARTED'}
+	| {type: 'SPIN_WHEEL'; force: number}
+	| {type: 'CHOOSE_CARD'; cardId: string}
+	| {type: 'PLAY_CARD'}
+	| {type: 'END_TURN'}
+
 export const playingMachine = setup({
 	types: {
-		context: {} as {players: Player[]},
+		input: {} as PlayingInput,
+		context: {} as PlayingContext,
+		events: {} as PlayingEvents,
+	},
+	actions: {
+		drawCardForCurrentPlayer: assign(({context}) => {
+			const newDrawPile = [...context.drawPile]
+			const drawnCard = newDrawPile.shift()
+
+			if (!drawnCard) return {}
+
+			const updatedPlayers = context.players.map((player, index) => {
+				if (index === context.currentPlayerIndex) {
+					return {
+						...player,
+						hand: [...player.hand, drawnCard],
+					}
+				}
+				return player
+			})
+
+			return {
+				players: updatedPlayers,
+				drawPile: newDrawPile,
+			}
+		}),
+		setChosenCard: assign({
+			chosenCard: ({context, event}) => {
+				if (event.type !== 'CHOOSE_CARD') return context.chosenCard
+
+				const currentPlayer = context.players[context.currentPlayerIndex]
+				return (
+					currentPlayer.hand.find((card) => card.id === event.cardId) || null
+				)
+			},
+		}),
+		spinWheel: assign({
+			wheelAngle: ({context, event}) => {
+				if (event.type !== 'SPIN_WHEEL') return context.wheelAngle
+				const spinDegrees = calculateSpin(event.force, context.rng)
+				return context.wheelAngle + spinDegrees
+			},
+			hasSpunThisTurn: true,
+		}),
+		playCard: assign(({context}) => {
+			if (!context.chosenCard) return {}
+
+			const updatedPlayers = context.players.map((player, index) => {
+				if (index === context.currentPlayerIndex) {
+					return {
+						...player,
+						hand: player.hand.filter(
+							(card) => card.id !== context.chosenCard!.id,
+						),
+					}
+				}
+				return player
+			})
+
+			const newDiscardPile = [context.chosenCard, ...context.discardPile]
+
+			const cardValue = getCardValue(context.chosenCard.rank)
+			const wheelMode = context.wheelAngle >= 180 ? 'min' : 'max'
+			const newScore =
+				wheelMode === 'max'
+					? context.currentScore + cardValue
+					: context.currentScore - cardValue
+
+			return {
+				players: updatedPlayers,
+				discardPile: newDiscardPile,
+				currentScore: newScore,
+			}
+		}),
+		advanceToNextPlayer: assign({
+			currentPlayerIndex: ({context}) => {
+				return (context.currentPlayerIndex + 1) % context.players.length
+			},
+			hasSpunThisTurn: false,
+			chosenCard: null,
+			chosenCardEffect: null,
+		}),
 	},
 }).createMachine({
 	id: 'playing',
 	initial: 'turnStart',
-	context: {
-		players: [],
-	},
+	context: ({input}) => ({
+		...input,
+		chosenCard: null,
+		chosenCardEffect: null,
+	}),
 	states: {
 		turnStart: {
-			type: 'final',
+			on: {
+				TURN_STARTED: {
+					target: 'playerTurn',
+					actions: 'drawCardForCurrentPlayer',
+				},
+			},
+		},
+		playerTurn: {
+			initial: 'awaitingAction',
+			states: {
+				awaitingAction: {
+					on: {
+						SPIN_WHEEL: {
+							actions: 'spinWheel',
+						},
+						CHOOSE_CARD: {
+							target: 'processingCard',
+							actions: 'setChosenCard',
+						},
+					},
+				},
+				processingCard: {
+					on: {
+						PLAY_CARD: {
+							target: 'postCardPlay',
+							actions: 'playCard',
+						},
+					},
+				},
+				postCardPlay: {
+					on: {
+						END_TURN: {
+							target: '#playing.turnStart',
+							actions: 'advanceToNextPlayer',
+						},
+					},
+				},
+			},
 		},
 	},
 })

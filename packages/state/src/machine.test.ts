@@ -1,7 +1,7 @@
 import {createActor} from 'xstate'
 import {describe, it, expect} from 'vitest'
 import {Rng} from '@repo/rng'
-import {lobbyMachine, setupMachine} from './machine'
+import {lobbyMachine, setupMachine, playingMachine} from './machine'
 
 describe('lobbyMachine', () => {
 	it('should start in waiting state with empty players, no rng, and standard deck', () => {
@@ -491,5 +491,216 @@ describe('setupMachine', () => {
 		expect(finalContext.maxThreshold).toBeGreaterThan(0)
 		expect(finalContext.wheelAngle).toBeGreaterThan(90)
 		expect(finalContext.currentScore).not.toBe(0)
+	})
+})
+
+describe('playingMachine', () => {
+	const createGameState = () => {
+		const rng = new Rng('playing-test-seed')
+		const players = [
+			{
+				id: 'player-1',
+				name: 'Alice',
+				isReady: true,
+				hand: [
+					{id: 'hearts-5', suit: 'hearts' as const, rank: '5' as const},
+					{id: 'hearts-7', suit: 'hearts' as const, rank: '7' as const},
+					{id: 'hearts-9', suit: 'hearts' as const, rank: '9' as const},
+				],
+			},
+			{
+				id: 'player-2',
+				name: 'Bob',
+				isReady: true,
+				hand: [
+					{id: 'diamonds-4', suit: 'diamonds' as const, rank: '4' as const},
+					{id: 'diamonds-6', suit: 'diamonds' as const, rank: '6' as const},
+					{id: 'diamonds-8', suit: 'diamonds' as const, rank: '8' as const},
+				],
+			},
+		]
+		const drawPile = [
+			{id: 'clubs-2', suit: 'clubs' as const, rank: '2' as const},
+			{id: 'clubs-3', suit: 'clubs' as const, rank: '3' as const},
+			{id: 'clubs-4', suit: 'clubs' as const, rank: '4' as const},
+		]
+		const discardPile = [
+			{id: 'spades-3', suit: 'spades' as const, rank: '3' as const},
+		]
+
+		return {
+			rng,
+			players,
+			drawPile,
+			discardPile,
+			minThreshold: -15,
+			maxThreshold: 40,
+			wheelAngle: 90,
+			currentScore: 3,
+			currentPlayerIndex: 0,
+			hasSpunThisTurn: false,
+		}
+	}
+
+	it('should draw a card for the current player at turn start', () => {
+		const gameState = createGameState()
+		const actor = createActor(playingMachine, {
+			input: gameState,
+		})
+		actor.start()
+
+		expect(actor.getSnapshot().value).toBe('turnStart')
+
+		const drawPileBefore = actor.getSnapshot().context.drawPile.length
+		const handBefore = actor.getSnapshot().context.players[0].hand.length
+
+		actor.send({type: 'TURN_STARTED'})
+
+		const context = actor.getSnapshot().context
+		expect(context.drawPile).toHaveLength(drawPileBefore - 1)
+		expect(context.players[0].hand).toHaveLength(handBefore + 1)
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'awaitingAction',
+		})
+	})
+
+	it('should allow player to choose and play a valid card', () => {
+		const gameState = createGameState()
+		const actor = createActor(playingMachine, {
+			input: gameState,
+		})
+		actor.start()
+
+		actor.send({type: 'TURN_STARTED'})
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'awaitingAction',
+		})
+
+		const cardToPlay = gameState.players[0].hand[0]
+		actor.send({type: 'CHOOSE_CARD', cardId: cardToPlay.id})
+
+		const context = actor.getSnapshot().context
+		expect(context.chosenCard).toEqual(cardToPlay)
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'processingCard',
+		})
+	})
+
+	it('should play chosen card to discard pile, remove from hand, and update score', () => {
+		const gameState = createGameState()
+		const actor = createActor(playingMachine, {
+			input: gameState,
+		})
+		actor.start()
+
+		actor.send({type: 'TURN_STARTED'})
+
+		const handBefore = actor.getSnapshot().context.players[0].hand.length
+		const discardBefore = actor.getSnapshot().context.discardPile.length
+		const scoreBefore = actor.getSnapshot().context.currentScore
+
+		const cardToPlay = actor.getSnapshot().context.players[0].hand[1]
+		actor.send({type: 'CHOOSE_CARD', cardId: cardToPlay.id})
+
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'processingCard',
+		})
+
+		actor.send({type: 'PLAY_CARD'})
+
+		const context = actor.getSnapshot().context
+		expect(context.players[0].hand).toHaveLength(handBefore - 1)
+		expect(
+			context.players[0].hand.find((c) => c.id === cardToPlay.id),
+		).toBeUndefined()
+		expect(context.discardPile).toHaveLength(discardBefore + 1)
+		expect(context.discardPile[0]).toEqual(cardToPlay)
+		expect(context.currentScore).not.toBe(scoreBefore)
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'postCardPlay',
+		})
+	})
+
+	it('should complete full turn and advance to next player', () => {
+		const gameState = createGameState()
+		const actor = createActor(playingMachine, {
+			input: gameState,
+		})
+		actor.start()
+
+		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
+
+		actor.send({type: 'TURN_STARTED'})
+		actor.send({type: 'CHOOSE_CARD', cardId: gameState.players[0].hand[0].id})
+		actor.send({type: 'PLAY_CARD'})
+
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'postCardPlay',
+		})
+
+		actor.send({type: 'END_TURN'})
+
+		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
+		expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(false)
+		expect(actor.getSnapshot().context.chosenCard).toBe(null)
+		expect(actor.getSnapshot().value).toBe('turnStart')
+	})
+
+	it('should handle complete multi-player game flow across multiple turns', () => {
+		const gameState = createGameState()
+		const actor = createActor(playingMachine, {
+			input: gameState,
+		})
+		actor.start()
+
+		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
+		expect(actor.getSnapshot().context.players[0].name).toBe('Alice')
+		expect(actor.getSnapshot().context.players[1].name).toBe('Bob')
+
+		actor.send({type: 'TURN_STARTED'})
+		const aliceCardToPlay = actor.getSnapshot().context.players[0].hand[0]
+		actor.send({type: 'CHOOSE_CARD', cardId: aliceCardToPlay.id})
+		actor.send({type: 'PLAY_CARD'})
+		const scoreAfterAlice = actor.getSnapshot().context.currentScore
+
+		actor.send({type: 'END_TURN'})
+
+		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
+		expect(actor.getSnapshot().value).toBe('turnStart')
+
+		actor.send({type: 'TURN_STARTED'})
+		expect(actor.getSnapshot().context.players[1].hand).toHaveLength(4)
+
+		const bobCardToPlay = actor.getSnapshot().context.players[1].hand[0]
+		actor.send({type: 'CHOOSE_CARD', cardId: bobCardToPlay.id})
+		actor.send({type: 'PLAY_CARD'})
+
+		const scoreAfterBob = actor.getSnapshot().context.currentScore
+		expect(scoreAfterBob).not.toBe(scoreAfterAlice)
+		expect(actor.getSnapshot().context.discardPile[0]).toEqual(bobCardToPlay)
+		expect(actor.getSnapshot().context.discardPile[1]).toEqual(aliceCardToPlay)
+
+		actor.send({type: 'END_TURN'})
+
+		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
+		expect(actor.getSnapshot().value).toBe('turnStart')
+	})
+
+	it('should allow player to spin the wheel during their turn', () => {
+		const gameState = createGameState()
+		const actor = createActor(playingMachine, {input: gameState}).start()
+
+		actor.send({type: 'TURN_STARTED'})
+
+		const initialWheelAngle = actor.getSnapshot().context.wheelAngle
+		expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(false)
+
+		actor.send({type: 'SPIN_WHEEL', force: 0.5})
+
+		expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
+		expect(actor.getSnapshot().context.wheelAngle).not.toBe(initialWheelAngle)
+		expect(actor.getSnapshot().context.wheelAngle).toBeGreaterThan(
+			initialWheelAngle,
+		)
 	})
 })
