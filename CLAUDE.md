@@ -15,6 +15,8 @@ Locally, the dev server is always running at http://localhost:5173/
 ### Monorepo Structure
 
 - `apps/web/` - Main SvelteKit application
+- `apps/server/` - Cloudflare Worker using Durable Objects to communicate game state
+- `packages/state/` - State shared by web & server apps
 
 ## Development Commands
 
