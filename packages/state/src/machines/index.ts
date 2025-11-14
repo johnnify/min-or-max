@@ -1,3 +1,3 @@
 export {lobbyMachine} from './lobby'
-export {setupMachine} from './setup'
-export {playingMachine} from './playing'
+export {setupMachine, type SetupInput} from './setup'
+export {playingMachine, type PlayingInput} from './playing'

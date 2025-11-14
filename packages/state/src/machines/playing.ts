@@ -8,7 +8,7 @@ import {
 	calculatePreviousPlayerWins,
 } from '../utils'
 
-type PlayingInput = {
+export type PlayingInput = {
 	rng: Rng
 	players: Player[]
 	drawPile: Card[]

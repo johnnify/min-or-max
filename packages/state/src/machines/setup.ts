@@ -14,7 +14,7 @@ type SetupContext = {
 	rng: Rng | null
 }
 
-type SetupInput = {
+export type SetupInput = {
 	rng: Rng
 	players: Player[]
 	deck: Card[]

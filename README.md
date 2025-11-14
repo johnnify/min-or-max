@@ -17,7 +17,7 @@ Monorepo for Min or Max, a multiplayer card game where you lay low or play it **
 
 ## Local development
 
-`pnpm i` & `pnpm dev` will get you there,!
+`pnpm i` & `pnpm dev` will get you there, but only after you've created your own `.env`! Check our `.env.test` files in each app for reference to create your own `.env` and/or `.env.local`.
 
 Make sure you have [pnpm](https://pnpm.io/) installed, and an appropriate version of Node. We recommend [Mise](https://mise.jdx.dev/), which will automatically switch to the Node version specified for this project and enable corepack to also bring in the appropriate version of pnpm, once you `cd` into the root directory.
 

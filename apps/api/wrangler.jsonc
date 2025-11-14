@@ -1,0 +1,38 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "min-or-max-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+
+	"workers_dev": true,
+
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+		},
+	},
+
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "GAME_ROOM",
+				"class_name": "GameRoom",
+				"script_name": "min-or-max-api",
+			},
+		],
+	},
+
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["GameRoom"],
+		},
+	],
+
+	"vars": {
+		"ALLOWED_ORIGINS": "https://min-or-max.j-e7c.workers.dev",
+	},
+}

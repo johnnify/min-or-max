@@ -21,6 +21,10 @@ pnpm i
 
 Will install dependencies for everything in the monorepo!
 
+### Environment variables
+
+Only `.env.test` is committed to version control, so you should use that as a template to create your own `.env` & `.env.local`.
+
 ### Start dev server on watch mode
 
 ```sh

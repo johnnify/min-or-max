@@ -1,3 +1,5 @@
+export type GamePhase = 'lobby' | 'setup' | 'playing' | 'gameOver'
+
 export type CardSuit = 'hearts' | 'diamonds' | 'clubs' | 'spades'
 export type CardRank =
 	| '2'
