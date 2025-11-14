@@ -40,6 +40,9 @@ type PlayingInput = {
 type PlayingContext = PlayingInput & {
 	chosenCard: Card | null
 	activeEffects: ActiveEffect[]
+	winner: Player | null
+	losers: Player[]
+	reason: 'exact_threshold' | 'exceeded_threshold' | null
 }
 
 type PlayingEvents =
@@ -203,6 +206,37 @@ export const playingMachine = setup({
 			hasSpunThisTurn: false,
 			chosenCard: null,
 		}),
+		setWinnerAndLosers: assign(({context}) => {
+			const isExact =
+				context.currentScore === context.minThreshold ||
+				context.currentScore === context.maxThreshold
+			const isOver =
+				context.currentScore < context.minThreshold ||
+				context.currentScore > context.maxThreshold
+
+			if (isExact) {
+				const winner = context.players[context.currentPlayerIndex]
+				const losers = context.players.filter((p) => p.id !== winner.id)
+				return {
+					winner,
+					losers,
+					reason: 'exact_threshold' as const,
+				}
+			} else if (isOver) {
+				const previousPlayerIndex =
+					(context.currentPlayerIndex - 1 + context.players.length) %
+					context.players.length
+				const winner = context.players[previousPlayerIndex]
+				const losers = context.players.filter((p) => p.id !== winner.id)
+				return {
+					winner,
+					losers,
+					reason: 'exceeded_threshold' as const,
+				}
+			}
+
+			return {}
+		}),
 	},
 	guards: {
 		canBeatTopCard: ({context, event}) => {
@@ -238,6 +272,18 @@ export const playingMachine = setup({
 		hasNotSpunThisTurn: ({context}) => {
 			return !context.hasSpunThisTurn
 		},
+		isExactThreshold: ({context}) => {
+			return (
+				context.currentScore === context.minThreshold ||
+				context.currentScore === context.maxThreshold
+			)
+		},
+		isOverThreshold: ({context}) => {
+			return (
+				context.currentScore < context.minThreshold ||
+				context.currentScore > context.maxThreshold
+			)
+		},
 	},
 }).createMachine({
 	id: 'playing',
@@ -246,6 +292,9 @@ export const playingMachine = setup({
 		...input,
 		chosenCard: null,
 		activeEffects: [],
+		winner: null,
+		losers: [],
+		reason: null,
 	}),
 	states: {
 		turnStart: {
@@ -305,6 +354,18 @@ export const playingMachine = setup({
 					},
 				},
 				postCardPlay: {
+					always: [
+						{
+							target: '#playing.gameOver',
+							guard: 'isExactThreshold',
+							actions: 'setWinnerAndLosers',
+						},
+						{
+							target: '#playing.gameOver',
+							guard: 'isOverThreshold',
+							actions: 'setWinnerAndLosers',
+						},
+					],
 					on: {
 						SPIN_WHEEL: {
 							guard: 'hasNotSpunThisTurn',
@@ -317,6 +378,9 @@ export const playingMachine = setup({
 					},
 				},
 			},
+		},
+		gameOver: {
+			type: 'final',
 		},
 	},
 })

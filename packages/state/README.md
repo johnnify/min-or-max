@@ -80,6 +80,7 @@ It's likely the Game Over state will need to move between the "celebratory / res
 There is no pausing the game!
 
 **Server concerns (not in state machines):**
+
 - Reconnection grace period for disconnected players
 - Bot replacement when players leave (invisible to remaining players)
 
@@ -174,34 +175,39 @@ Main gameplay loop where players take turns.
 
 ```
 playing
-└─ turnStart (entry: draw card for current player)
-   └─ playerTurn (compound state)
-      ├─ awaitingAction (wait for SPIN_WHEEL or CHOOSE_CARD)
-      ├─ processingCard (determine if card has effect)
-      ├─ configuringEffect (wait for ADD_EFFECT/SEARCH_AND_DRAW/PLAY_CARD)
-      ├─ readyToPlay (wait for PLAY_CARD)
-      └─ postCardPlay (wait for END_TURN)
+├─ turnStart (entry: draw card for current player)
+├─ playerTurn (compound state)
+│  ├─ awaitingAction (wait for SPIN_WHEEL or CHOOSE_CARD)
+│  ├─ processingCard (determine if card has effect)
+│  ├─ configuringEffect (wait for ADD_EFFECT/SEARCH_AND_DRAW/PLAY_CARD)
+│  ├─ readyToPlay (wait for PLAY_CARD)
+│  └─ postCardPlay (check win/loss, wait for END_TURN)
+└─ gameOver (final state)
 ```
 
 #### Current Implementation
 
 **`turnStart`**
+
 - Automatically draws one card for current player on `TURN_STARTED`
 - Transitions to `playerTurn.awaitingAction`
 - **Reshuffling logic:** If draw pile is empty, moves all cards from discard pile (except top card) to draw pile and shuffles
   - Fully tested in playing.test.ts:348-390
 
 **`playerTurn.awaitingAction`**
+
 - Player can:
   - Spin wheel with `SPIN_WHEEL` (updates wheelAngle, stays in awaitingAction)
   - Choose card with `CHOOSE_CARD` (validates with `canBeatTopCard` guard, transitions to processingCard)
 
 **`playerTurn.processingCard`**
+
 - Automatically evaluates if chosen card has effect:
   - If `chosenCardHasEffect`: → `configuringEffect`
   - Else: → `readyToPlay`
 
 **`playerTurn.configuringEffect`**
+
 - Waits for effect configuration events:
   - `ADD_EFFECT` - Adds effect to activeEffects array (e.g., value-adder, value-multiplier)
   - `SEARCH_AND_DRAW` - Searches draw pile for specific rank (J/Q/K) and adds to hand
@@ -209,16 +215,31 @@ playing
 - **Note:** Currently hardcoded in UI demo, needs Dialog for user choices
 
 **`playerTurn.readyToPlay`**
+
 - No effects to configure, wait for `PLAY_CARD`
 
 **`playerTurn.postCardPlay`**
+
 - Card played and score updated
 - Applies active effects (value-adder, value-multiplier) and decrements stacksRemaining
+- **Automatically checks win/loss conditions:**
+  - If `isExactThreshold`: → `gameOver` (player wins!)
+  - If `isOverThreshold`: → `gameOver` (player loses!)
 - **Post-play wheel spinning:** Can spin wheel if not already spun this turn (guarded by `hasNotSpunThisTurn`)
   - Fully tested in playing.test.ts:392-461
 - Waits for `END_TURN` to advance to next player
 
+**`gameOver`**
+
+- Final state - game has ended
+- Reached when player wins (exact threshold) or loses (exceeded threshold)
+- Context populated with:
+  - `winner`: Player who won
+  - `losers`: All other players
+  - `reason`: 'exact_threshold' (win) or 'exceeded_threshold' (loss)
+
 **Ace Rules (Implemented):**
+
 - **Ace on discard pile:** Any card beats it
 - **Ace in hand:** Beats any card on discard pile
 - **Ace scoring:** User chooses 1 or 11 via `ADD_EFFECT` with `value: 0` (for 1) or `value: 10` (for 11)
@@ -226,6 +247,7 @@ playing
   - UI currently hardcodes to 11, needs Dialog for user choice
 
 **Events:**
+
 - `TURN_STARTED` - Draw card for current player
 - `SPIN_WHEEL` - Update wheel angle based on force (payload: `{force: number}`)
 - `CHOOSE_CARD` - Select card to play (payload: `{cardId: string}`)
@@ -235,19 +257,41 @@ playing
 - `END_TURN` - Complete turn, advance to next player
 
 **Guards:**
+
 - `canBeatTopCard` - Validates chosen card can beat top discard card (Ace rules applied)
 - `chosenCardHasEffect` - Checks if chosen card has `effect` property
+- `hasNotSpunThisTurn` - Checks if wheel hasn't been spun this turn
+- `isExactThreshold` - Checks if score exactly matches min or max threshold (WIN)
+- `isOverThreshold` - Checks if score exceeded thresholds (LOSS)
 
 **Context (extends setup context):**
+
 - `currentPlayerIndex: number` - Index of current player
 - `hasSpunThisTurn: boolean` - Tracks if wheel spun this turn
 - `chosenCard: Card | null` - Currently selected card
 - `activeEffects: ActiveEffect[]` - Effects that modify card values
+- `winner: Player | null` - The player who won (set when gameOver)
+- `losers: Player[]` - All losing players (set when gameOver)
+- `reason: 'exact_threshold' | 'exceeded_threshold' | null` - Why the game ended
+
+**Implemented:**
+
+- ✅ Win condition: Transitions to `gameOver` when score exactly matches minThreshold or maxThreshold
+  - Winner = current player who hit exact threshold
+  - Losers = all other players
+  - Tested in playing.test.ts:463-505
+- ✅ Loss condition: Transitions to `gameOver` when score exceeds thresholds (< min or > max)
+  - Winner = **previous player** (who went right before the player who broke threshold)
+  - Losers = all other players (including current player who broke threshold)
+  - Tested in playing.test.ts:507-549
+- ✅ Complete game story test showing realistic multi-turn gameplay to victory
+  - Tested in playing.test.ts:551-618
+- ✅ Instant win/loss: Checks happen immediately in `postCardPlay` state via `always` transitions (no waiting for optional wheel spin)
 
 **Not Yet Implemented:**
-- Win/loss condition checking (exact/exceeded thresholds)
-- Transition to gameOver machine
+
 - Turn timeout handling
+- Full gameOver machine (currently just a final state)
 
 ### Game Over Machine
 
@@ -266,6 +310,7 @@ gameOver
 ```
 
 **Planned Events:**
+
 - `SHOW_STATS` - Display game stats
 - `VOTE_REMATCH` - Player votes for rematch
 - `VOTE_LOBBY` - Player votes to return to lobby
@@ -274,8 +319,8 @@ gameOver
 - `RETURN_TO_LOBBY` - Return to lobby
 
 **Planned Context:**
+
 - `winner: Player | null` - The winning player
 - `losers: Player[]` - Losing players
 - `reason: 'exact_threshold' | 'exceeded_threshold'`
 - `rematchVotes: Map<playerId, boolean>`
-

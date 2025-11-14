@@ -437,11 +437,19 @@ describe('playingMachine', () => {
 			const topCard = actor.getSnapshot().context.discardPile[0].card
 			const hand = actor.getSnapshot().context.players[0].hand
 
-			const validCard = hand.find(c => {
+			const validCard = hand.find((c) => {
 				if (c.rank === 'A') return true
-				const cardValue = c.rank === 'J' || c.rank === 'Q' || c.rank === 'K' ? 10 : parseInt(c.rank, 10)
-				const topValue = topCard.rank === 'J' || topCard.rank === 'Q' || topCard.rank === 'K' ? 10 : parseInt(topCard.rank, 10)
-				return wheelMode === 'max' ? cardValue >= topValue : cardValue <= topValue
+				const cardValue =
+					c.rank === 'J' || c.rank === 'Q' || c.rank === 'K'
+						? 10
+						: parseInt(c.rank, 10)
+				const topValue =
+					topCard.rank === 'J' || topCard.rank === 'Q' || topCard.rank === 'K'
+						? 10
+						: parseInt(topCard.rank, 10)
+				return wheelMode === 'max'
+					? cardValue >= topValue
+					: cardValue <= topValue
 			})
 
 			actor.send({type: 'CHOOSE_CARD', cardId: validCard!.id})
@@ -457,6 +465,179 @@ describe('playingMachine', () => {
 
 			expect(actor.getSnapshot().context.wheelAngle).toBe(wheelAngleBefore)
 			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
+		})
+	})
+
+	describe('win conditions', () => {
+		it('should transition to gameOver when score exactly matches maxThreshold', () => {
+			const gameState = createGameState()
+			gameState.maxThreshold = 15
+			gameState.currentScore = 10
+			gameState.wheelAngle = 90
+			gameState.discardPile = [createPlayedCard(createCard('hearts', '3'), 3)]
+			gameState.players[0].hand = [createCard('spades', '5')]
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+			actor.send({type: 'TURN_STARTED'})
+			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-5'})
+			actor.send({type: 'PLAY_CARD'})
+
+			expect(actor.getSnapshot().context.currentScore).toBe(15)
+			expect(actor.getSnapshot().value).toBe('gameOver')
+			expect(actor.getSnapshot().context.winner?.id).toBe('player-1')
+			expect(actor.getSnapshot().context.losers).toHaveLength(1)
+			expect(actor.getSnapshot().context.losers[0].id).toBe('player-2')
+			expect(actor.getSnapshot().context.reason).toBe('exact_threshold')
+		})
+
+		it('should transition to gameOver when score exactly matches minThreshold', () => {
+			const gameState = createGameState()
+			gameState.minThreshold = -15
+			gameState.currentScore = -10
+			gameState.wheelAngle = 270
+			gameState.discardPile = [createPlayedCard(createCard('hearts', '7'), -7)]
+			gameState.players[0].hand = [createCard('spades', '5')]
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+			actor.send({type: 'TURN_STARTED'})
+			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-5'})
+			actor.send({type: 'PLAY_CARD'})
+
+			expect(actor.getSnapshot().context.currentScore).toBe(-15)
+			expect(actor.getSnapshot().value).toBe('gameOver')
+			expect(actor.getSnapshot().context.winner?.id).toBe('player-1')
+			expect(actor.getSnapshot().context.losers).toHaveLength(1)
+			expect(actor.getSnapshot().context.losers[0].id).toBe('player-2')
+			expect(actor.getSnapshot().context.reason).toBe('exact_threshold')
+		})
+	})
+
+	describe('loss conditions', () => {
+		it('should transition to gameOver when score exceeds maxThreshold', () => {
+			const gameState = createGameState()
+			gameState.maxThreshold = 15
+			gameState.currentScore = 10
+			gameState.wheelAngle = 90
+			gameState.discardPile = [createPlayedCard(createCard('hearts', '3'), 3)]
+			gameState.players[0].hand = [createCard('spades', '7')]
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+			actor.send({type: 'TURN_STARTED'})
+			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-7'})
+			actor.send({type: 'PLAY_CARD'})
+
+			expect(actor.getSnapshot().context.currentScore).toBe(17)
+			expect(actor.getSnapshot().value).toBe('gameOver')
+			expect(actor.getSnapshot().context.winner?.id).toBe('player-2')
+			expect(actor.getSnapshot().context.losers).toHaveLength(1)
+			expect(actor.getSnapshot().context.losers[0].id).toBe('player-1')
+			expect(actor.getSnapshot().context.reason).toBe('exceeded_threshold')
+		})
+
+		it('should transition to gameOver when score exceeds minThreshold', () => {
+			const gameState = createGameState()
+			gameState.minThreshold = -15
+			gameState.currentScore = -10
+			gameState.wheelAngle = 270
+			gameState.discardPile = [createPlayedCard(createCard('hearts', '9'), -9)]
+			gameState.players[0].hand = [createCard('spades', '7')]
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+			actor.send({type: 'TURN_STARTED'})
+			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-7'})
+			actor.send({type: 'PLAY_CARD'})
+
+			expect(actor.getSnapshot().context.currentScore).toBe(-17)
+			expect(actor.getSnapshot().value).toBe('gameOver')
+			expect(actor.getSnapshot().context.winner?.id).toBe('player-2')
+			expect(actor.getSnapshot().context.losers).toHaveLength(1)
+			expect(actor.getSnapshot().context.losers[0].id).toBe('player-1')
+			expect(actor.getSnapshot().context.reason).toBe('exceeded_threshold')
+		})
+	})
+
+	describe('story: complete game to victory', () => {
+		it('should play a realistic multi-turn game ending in a win', () => {
+			const gameState = createGameState()
+			gameState.minThreshold = -20
+			gameState.maxThreshold = 30
+			gameState.currentScore = 0
+			gameState.wheelAngle = 90
+			gameState.discardPile = [createPlayedCard(createCard('hearts', '5'), 5)]
+			gameState.players = [
+				{
+					id: 'player-1',
+					name: 'Alice',
+					isReady: true,
+					hand: [
+						createCard('spades', '6'),
+						createCard('hearts', '8'),
+						createCard('diamonds', '10'),
+					],
+				},
+				{
+					id: 'player-2',
+					name: 'Bob',
+					isReady: true,
+					hand: [
+						createCard('clubs', '7'),
+						createCard('spades', '9'),
+						createCard('hearts', 'K'),
+					],
+				},
+			]
+			gameState.drawPile = [
+				createCard('diamonds', '4'),
+				createCard('clubs', '3'),
+				createCard('spades', '2'),
+			]
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+
+			actor.send({type: 'TURN_STARTED'})
+			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
+			expect(actor.getSnapshot().context.players[0].hand).toHaveLength(4)
+
+			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-6'})
+			actor.send({type: 'PLAY_CARD'})
+			expect(actor.getSnapshot().context.currentScore).toBe(6)
+			expect(actor.getSnapshot().context.discardPile[0].card.rank).toBe('6')
+
+			actor.send({type: 'END_TURN'})
+			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
+			expect(actor.getSnapshot().value).toBe('turnStart')
+
+			actor.send({type: 'TURN_STARTED'})
+			expect(actor.getSnapshot().context.players[1].hand).toHaveLength(4)
+
+			actor.send({type: 'CHOOSE_CARD', cardId: 'clubs-7'})
+			actor.send({type: 'PLAY_CARD'})
+			expect(actor.getSnapshot().context.currentScore).toBe(13)
+
+			actor.send({type: 'END_TURN'})
+			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
+
+			actor.send({type: 'TURN_STARTED'})
+			expect(actor.getSnapshot().context.players[0].hand).toHaveLength(4)
+
+			actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-8'})
+			actor.send({type: 'PLAY_CARD'})
+			expect(actor.getSnapshot().context.currentScore).toBe(21)
+
+			actor.send({type: 'END_TURN'})
+
+			actor.send({type: 'TURN_STARTED'})
+			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
+
+			actor.send({type: 'SPIN_WHEEL', force: 0.05})
+			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
+
+			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-9'})
+			actor.send({type: 'PLAY_CARD'})
+			expect(actor.getSnapshot().context.currentScore).toBe(30)
+
+			expect(actor.getSnapshot().value).toBe('gameOver')
+			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
 		})
 	})
 

@@ -10,6 +10,7 @@
 		"github.vscode-github-actions",
 		"mikestead.dotenv",
 		"ms-playwright.playwright",
+		"statelyai.stately-vscode",
 		"svelte.svelte-vscode"
 	]
 }
