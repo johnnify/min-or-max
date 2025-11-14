@@ -1,5 +1,5 @@
 import {assign, setup} from 'xstate'
-import {Rng} from '@repo/rng'
+import {Rng, shuffle} from '@repo/rng'
 import type {ActiveEffect, Card, CardRank, PlayedCard, Player} from '../types'
 
 const calculateSpin = (force: number, rng: Rng | null): number => {
@@ -58,6 +58,20 @@ export const playingMachine = setup({
 		events: {} as PlayingEvents,
 	},
 	actions: {
+		reshuffleDiscardIntoDraw: assign(({context}) => {
+			if (context.drawPile.length > 0 || context.discardPile.length <= 1) {
+				return {}
+			}
+
+			const [topCard, ...cardsToReshuffle] = context.discardPile
+			const cards = cardsToReshuffle.map((playedCard) => playedCard.card)
+			const shuffled = shuffle(cards, context.rng!)
+
+			return {
+				drawPile: shuffled,
+				discardPile: [topCard],
+			}
+		}),
 		drawCardForCurrentPlayer: assign(({context}) => {
 			const newDrawPile = [...context.drawPile]
 			const drawnCard = newDrawPile.shift()
@@ -221,6 +235,9 @@ export const playingMachine = setup({
 		chosenCardHasEffect: ({context}) => {
 			return context.chosenCard?.effect !== undefined
 		},
+		hasNotSpunThisTurn: ({context}) => {
+			return !context.hasSpunThisTurn
+		},
 	},
 }).createMachine({
 	id: 'playing',
@@ -235,7 +252,7 @@ export const playingMachine = setup({
 			on: {
 				TURN_STARTED: {
 					target: 'playerTurn',
-					actions: 'drawCardForCurrentPlayer',
+					actions: ['reshuffleDiscardIntoDraw', 'drawCardForCurrentPlayer'],
 				},
 			},
 		},
@@ -289,6 +306,10 @@ export const playingMachine = setup({
 				},
 				postCardPlay: {
 					on: {
+						SPIN_WHEEL: {
+							guard: 'hasNotSpunThisTurn',
+							actions: 'spinWheel',
+						},
 						END_TURN: {
 							target: '#playing.turnStart',
 							actions: 'advanceToNextPlayer',

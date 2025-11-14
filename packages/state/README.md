@@ -30,8 +30,6 @@ pnpm test
 
 I am documenting the gameplay mechanics here, to help us derive the states we need.
 
-At any time, players can "react" by tapping a selection of emojis like 😂, 🧡, 😁, 😱. I propose a `PLAYER_REACTED`, with an emoji payload.
-
 ### Lobby
 
 We need a place for players to wait in before joining the game. Players can join alphanumeric rooms, if they want to guarantee they play with friends (like room `K234`: 1-9 + JKQ, representing the common card deck). This will likely be obfuscated to the user and not part of our state machines: room codes will be generated at the server and be "kept" in the URL, `/play/[:roomId]`.
@@ -81,25 +79,26 @@ It's likely the Game Over state will need to move between the "celebratory / res
 
 There is no pausing the game!
 
-There will need to be a reconnection grace period. If a player leaves, we'll need to get a bot to replace them (however, no need for the user to know it's a bot: to them, it's just like a new replacement player joined)
+**Server concerns (not in state machines):**
+- Reconnection grace period for disconnected players
+- Bot replacement when players leave (invisible to remaining players)
 
 ## State Machines
 
-### Game Machine (Root)
+### Architecture: Separate Actors
 
-The main state machine coordinating the entire game flow.
+The game uses **separate, independent state machines** rather than a parent orchestrator:
 
-#### Top-Level States
+1. **lobbyMachine** - Players join and ready up
+2. **setupMachine** - Initialize game board and deal cards
+3. **playingMachine** - Main gameplay loop
+4. **gameOverMachine** - End-of-game flow (not yet implemented)
 
-```
-game
-├─ lobby
-├─ setup
-├─ playing
-└─ gameOver
-```
+Each machine receives context from the previous machine's snapshot as input, creating a linear flow: lobby → setup → playing → gameOver.
 
-### Lobby Machine (Child)
+This follows XState's "start flat, then nest" principle - we avoid unnecessary parent orchestration for a linear game flow.
+
+### Lobby Machine
 
 **States:**
 
@@ -167,7 +166,7 @@ Initializes the game board and deals initial cards. Each step is discrete for su
   - `wheelAngle >= 180 && wheelAngle < 360` → `'min'`
   - Never stored separately to prevent desync!
 
-### Playing Machine (Child)
+### Playing Machine
 
 Main gameplay loop where players take turns.
 
@@ -175,126 +174,88 @@ Main gameplay loop where players take turns.
 
 ```
 playing
-└─ round (repeating until game over)
-   ├─ turnStart
-   ├─ shufflingDrawPile (conditional)
-   ├─ playerTurn (nested compound state)
-   │  ├─ awaitingAction
-   │  ├─ spinningWheel
-   │  ├─ choosingCard
-   │  ├─ choosingCardEffect
-   │  ├─ processingCard
-   │  └─ postCardPlay
-   └─ evaluatingOutcome
+└─ turnStart (entry: draw card for current player)
+   └─ playerTurn (compound state)
+      ├─ awaitingAction (wait for SPIN_WHEEL or CHOOSE_CARD)
+      ├─ processingCard (determine if card has effect)
+      ├─ configuringEffect (wait for ADD_EFFECT/SEARCH_AND_DRAW/PLAY_CARD)
+      ├─ readyToPlay (wait for PLAY_CARD)
+      └─ postCardPlay (wait for END_TURN)
 ```
 
-#### Sub-states Detail:
+#### Current Implementation
 
 **`turnStart`**
-
-- Check if draw pile is empty
-  - If empty: move all cards from discard pile except the top card (card to beat) into draw pile, transition to `shufflingDrawPile`
-  - If not empty: auto-draw one card for current player, transition to `playerTurn.awaitingAction`
-
-**`shufflingDrawPile`**
-
-- Shuffle the draw pile after replenishing from discard pile
-- On `PILE_SHUFFLED`: draw one card for current player, transition to `playerTurn.awaitingAction`
-- Can also be triggered during gameplay by card effects that require shuffling the discard pile
+- Automatically draws one card for current player on `TURN_STARTED`
+- Transitions to `playerTurn.awaitingAction`
+- **Reshuffling logic:** If draw pile is empty, moves all cards from discard pile (except top card) to draw pile and shuffles
+  - Fully tested in playing.test.ts:348-390
 
 **`playerTurn.awaitingAction`**
-
-- Player can choose to: spin wheel OR choose card to play
-- Wait for `SPIN_WHEEL` or `CHOOSE_CARD` event
-
-**`playerTurn.spinningWheel`**
-
-- Wheel animation playing based on `force` parameter (subtle vs hard spin)
-- On `WHEEL_SPIN_COMPLETE`: update wheelAngle, mark hasSpunThisTurn
-- **Important:** Spinning does NOT recalculate current score - only affects next card played
-- Return to `awaitingAction` if no card chosen yet
-
-**`playerTurn.choosingCard`**
-
-- Player chooses which card to play
-- On `CHOOSE_CARD`: validate card beats top discard (see Ace rules below)
-- If card has special effect (e.g., Ace, future Jokers/face cards): transition to `choosingCardEffect`
-- Else: transition to `processingCard`
-
-**`playerTurn.choosingCardEffect`**
-
-- Player must choose card-specific effects
-- For Ace: choose to play as 1 or 11
-- For future cards: other effects (e.g., Jack: draw next face card, etc.)
-- On `CHOOSE_CARD_EFFECT`: transition to `processingCard`
+- Player can:
+  - Spin wheel with `SPIN_WHEEL` (updates wheelAngle, stays in awaitingAction)
+  - Choose card with `CHOOSE_CARD` (validates with `canBeatTopCard` guard, transitions to processingCard)
 
 **`playerTurn.processingCard`**
+- Automatically evaluates if chosen card has effect:
+  - If `chosenCardHasEffect`: → `configuringEffect`
+  - Else: → `readyToPlay`
 
-- Card is played to discard pile and score is calculated
-- Check immediate win/loss conditions:
-  - Score === minThreshold OR score === maxThreshold → transition directly to `gameOver.showingResults` (winner)
-  - Score < minThreshold OR score > maxThreshold → transition directly to `gameOver.showingResults` (loser)
-- If no insta-win/loss: transition to `postCardPlay`
+**`playerTurn.configuringEffect`**
+- Waits for effect configuration events:
+  - `ADD_EFFECT` - Adds effect to activeEffects array (e.g., value-adder, value-multiplier)
+  - `SEARCH_AND_DRAW` - Searches draw pile for specific rank (J/Q/K) and adds to hand
+  - `PLAY_CARD` - Proceeds to postCardPlay
+- **Note:** Currently hardcoded in UI demo, needs Dialog for user choices
+
+**`playerTurn.readyToPlay`**
+- No effects to configure, wait for `PLAY_CARD`
 
 **`playerTurn.postCardPlay`**
+- Card played and score updated
+- Applies active effects (value-adder, value-multiplier) and decrements stacksRemaining
+- **Post-play wheel spinning:** Can spin wheel if not already spun this turn (guarded by `hasNotSpunThisTurn`)
+  - Fully tested in playing.test.ts:392-461
+- Waits for `END_TURN` to advance to next player
 
-- Card has been played without triggering game over
-- If wheel not spun this turn: can still spin (back to `spinningWheel`)
-- Else: transition to `evaluatingOutcome`
-
-**`evaluatingOutcome`**
-
-- Final evaluation after turn is complete
-- **Note:** Most win/loss conditions are already evaluated in `processingCard`
-- This state primarily handles any remaining edge cases and transitions to next player's `turnStart`
-- **No auto-loss for having no valid cards** - player had chance to spin wheel first
-
-**Ace Rules:**
-
-- **Ace on discard pile:** Any card beats it (Ace is both lowest and highest)
-- **Ace in hand:** Beats any card on discard pile (regardless of wheel mode)
-- **Ace scoring:** Player chooses 1 or 11 when played (except setup where Ace is dependent on wheel mode)
+**Ace Rules (Implemented):**
+- **Ace on discard pile:** Any card beats it
+- **Ace in hand:** Beats any card on discard pile
+- **Ace scoring:** User chooses 1 or 11 via `ADD_EFFECT` with `value: 0` (for 1) or `value: 10` (for 11)
+  - Fully tested in playing.test.ts:349-400
+  - UI currently hardcodes to 11, needs Dialog for user choice
 
 **Events:**
-
-- `TURN_STARTED` - Auto-draw card (or trigger shuffle if draw pile empty)
-- `SHUFFLE_PILE` - Shuffle a specific pile (payload: `{pile: 'draw' | 'discard'}`)
-- `PILE_SHUFFLED` - Pile shuffling complete, proceed with drawing card
-- `SPIN_WHEEL` - Player initiates wheel spin with `force: number` (0-1, subtle to hard)
-- `WHEEL_SPIN_COMPLETE` - Wheel animation finished, includes final `angle: number`
-- `CHOOSE_CARD` - Player chooses card with `cardId: string`
-- `CHOOSE_CARD_EFFECT` - Player chooses card-specific effect (e.g., `aceValue: 1 | 11` for Ace)
-- `PLAY_CARD` - Card is played to discard pile (internal event)
-- `SKIP_SPIN` - Player chooses not to spin after playing card
-- `END_TURN` - Turn complete, move to next player (internal event)
-- `PLAYER_WON` - Player hit exact threshold (internal event)
-- `PLAYER_LOST` - Player exceeded threshold (internal event)
-- `TIMEOUT` - Turn time limit reached, server auto-plays or forces loss
+- `TURN_STARTED` - Draw card for current player
+- `SPIN_WHEEL` - Update wheel angle based on force (payload: `{force: number}`)
+- `CHOOSE_CARD` - Select card to play (payload: `{cardId: string}`)
+- `ADD_EFFECT` - Add active effect (payload: `{effect: ActiveEffect}`)
+- `SEARCH_AND_DRAW` - Find and draw specific rank (payload: `{rank: 'J' | 'Q' | 'K'}`)
+- `PLAY_CARD` - Play chosen card to discard pile
+- `END_TURN` - Complete turn, advance to next player
 
 **Guards:**
+- `canBeatTopCard` - Validates chosen card can beat top discard card (Ace rules applied)
+- `chosenCardHasEffect` - Checks if chosen card has `effect` property
 
-- `canBeatTopCard` - Chosen card beats discard pile top card
-  - If chosen card is Ace: always true
-  - If top card is Ace: always true
-  - If wheelMode === 'max': chosenCardValue >= topCardValue
-  - If wheelMode === 'min': chosenCardValue <= topCardValue
-- `isExactThreshold` - Score exactly matches min or max threshold
-- `isOverThreshold` - Score exceeded limits (< min or > max)
-- `hasSpunThisTurn` - Wheel already spun this turn
-- `hasCardEffect` - Chosen card has special effect requiring player choice (Ace, future Jokers/face cards)
+**Context (extends setup context):**
+- `currentPlayerIndex: number` - Index of current player
+- `hasSpunThisTurn: boolean` - Tracks if wheel spun this turn
+- `chosenCard: Card | null` - Currently selected card
+- `activeEffects: ActiveEffect[]` - Effects that modify card values
 
-**Context (in addition to setup context):**
+**Not Yet Implemented:**
+- Win/loss condition checking (exact/exceeded thresholds)
+- Transition to gameOver machine
+- Turn timeout handling
 
-- `currentPlayerIndex: number`
-- `hasSpunThisTurn: boolean` - Reset each turn
-- `chosenCard: Card | null`
-- `chosenCardEffect: {aceValue?: 1 | 11} | null` - Extensible for future card effects
+### Game Over Machine
 
-### Game Over Machine (Child)
+**Status:** Not yet implemented
 
-Handles end-of-game flow.
+Planned to handle end-of-game flow including results display, rematch voting, and lobby return.
 
-**States:**
+**Planned States:**
 
 ```
 gameOver
@@ -304,56 +265,17 @@ gameOver
    └─ countdown (if all agree)
 ```
 
-**Events:**
-
+**Planned Events:**
 - `SHOW_STATS` - Display game stats
 - `VOTE_REMATCH` - Player votes for rematch
 - `VOTE_LOBBY` - Player votes to return to lobby
 - `PLAYER_LEFT` - Player leaves during voting
-- `ALL_VOTED_REMATCH` - All remaining players voted rematch
 - `REMATCH_STARTING` - Countdown complete, transition back to setup
-- `RETURN_TO_LOBBY` - At least one player voted lobby or insufficient players
+- `RETURN_TO_LOBBY` - Return to lobby
 
-**Guards:**
-
-- `allHumansVotedRematch` - All remaining human players voted rematch
-- `hasMinimumPlayers` - At least 2 human players remain
-
-**Context:**
-
-- `winner: Player | null` - The winning player (only one winner per game)
-- `losers: Player[]` - Array of losing players (at least one, potentially multiple in edge cases)
+**Planned Context:**
+- `winner: Player | null` - The winning player
+- `losers: Player[]` - Losing players
 - `reason: 'exact_threshold' | 'exceeded_threshold'`
 - `rematchVotes: Map<playerId, boolean>`
 
-**Notes:**
-
-- Bots automatically leave if 2+ human players remain
-- Rematch proceeds with remaining human players only (minimum 2)
-- If player leaves during voting and <2 humans remain, return to lobby
-
-### Parallel States (Global)
-
-These run concurrently with the main game flow.
-
-**`reactions` (parallel)**
-
-- Handles `PLAYER_REACTED` events at any time
-- Event: `PLAYER_REACTED` with structure:
-  - `playerId: string` - ID of player who reacted
-  - `type: 'emoji'` - Type of reaction (only emoji for now, extensible for future)
-  - `value: string` - The emoji string (e.g., '😂', '🧡', '😁', '😱')
-- Updates reaction UI (emoji animations)
-- No state transitions, just actions
-
-**`connection` (parallel)**
-
-- Tracks player connection status per player
-- States: `connected` | `reconnecting` | `disconnected`
-- Events:
-  - `PLAYER_DISCONNECTED` - Player lost connection
-  - `PLAYER_RECONNECTED` - Player reconnected
-  - `GRACE_PERIOD_EXPIRED` - Reconnection window closed
-- On disconnect → grace period → backend replaces with bot (state machine agnostic)
-- On reconnect within grace period → restore player state
-- Bot replacement is backend implementation detail (not in state machine)

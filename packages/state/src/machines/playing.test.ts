@@ -345,6 +345,121 @@ describe('playingMachine', () => {
 		)
 	})
 
+	describe('draw pile reshuffling', () => {
+		it('should reshuffle discard pile into draw pile when draw pile is empty at turn start', () => {
+			const gameState = createGameState()
+			gameState.drawPile = []
+			gameState.discardPile = [
+				createPlayedCard(createCard('hearts', '5'), 5),
+				createPlayedCard(createCard('spades', '7'), 7),
+				createPlayedCard(createCard('clubs', '9'), 9),
+				createPlayedCard(createCard('diamonds', '3'), 3),
+			]
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+
+			expect(actor.getSnapshot().context.drawPile).toHaveLength(0)
+			expect(actor.getSnapshot().context.discardPile).toHaveLength(4)
+
+			actor.send({type: 'TURN_STARTED'})
+
+			const context = actor.getSnapshot().context
+			expect(context.drawPile).toHaveLength(2)
+			expect(context.discardPile).toHaveLength(1)
+			expect(context.discardPile[0].card.rank).toBe('5')
+			expect(context.players[0].hand).toHaveLength(4)
+		})
+
+		it('should not reshuffle when draw pile has cards', () => {
+			const gameState = createGameState()
+			gameState.drawPile = [createCard('hearts', 'K')]
+			gameState.discardPile = [
+				createPlayedCard(createCard('spades', '5'), 5),
+				createPlayedCard(createCard('clubs', '7'), 7),
+			]
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+
+			actor.send({type: 'TURN_STARTED'})
+
+			const context = actor.getSnapshot().context
+			expect(context.drawPile).toHaveLength(0)
+			expect(context.discardPile).toHaveLength(2)
+			expect(context.players[0].hand).toHaveLength(4)
+		})
+	})
+
+	describe('post-card-play wheel spinning', () => {
+		it('should allow spinning wheel after playing card if not spun this turn', () => {
+			const gameState = createGameState()
+			gameState.wheelAngle = 90
+			gameState.hasSpunThisTurn = false
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+			actor.send({type: 'TURN_STARTED'})
+			actor.send({type: 'CHOOSE_CARD', cardId: gameState.players[0].hand[0].id})
+			actor.send({type: 'PLAY_CARD'})
+
+			expect(actor.getSnapshot().value).toMatchObject({
+				playerTurn: 'postCardPlay',
+			})
+
+			const wheelAngleBefore = actor.getSnapshot().context.wheelAngle
+			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(false)
+
+			actor.send({type: 'SPIN_WHEEL', force: 0.5})
+
+			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
+			expect(actor.getSnapshot().context.wheelAngle).toBeGreaterThan(
+				wheelAngleBefore,
+			)
+			expect(actor.getSnapshot().value).toMatchObject({
+				playerTurn: 'postCardPlay',
+			})
+
+			actor.send({type: 'END_TURN'})
+			expect(actor.getSnapshot().value).toBe('turnStart')
+		})
+
+		it('should not allow spinning wheel after playing card if already spun this turn', () => {
+			const gameState = createGameState()
+			gameState.wheelAngle = 90
+			gameState.hasSpunThisTurn = false
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+			actor.send({type: 'TURN_STARTED'})
+
+			actor.send({type: 'SPIN_WHEEL', force: 0.05})
+			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
+
+			const currentWheelAngle = actor.getSnapshot().context.wheelAngle
+			const wheelMode = currentWheelAngle >= 180 ? 'min' : 'max'
+			const topCard = actor.getSnapshot().context.discardPile[0].card
+			const hand = actor.getSnapshot().context.players[0].hand
+
+			const validCard = hand.find(c => {
+				if (c.rank === 'A') return true
+				const cardValue = c.rank === 'J' || c.rank === 'Q' || c.rank === 'K' ? 10 : parseInt(c.rank, 10)
+				const topValue = topCard.rank === 'J' || topCard.rank === 'Q' || topCard.rank === 'K' ? 10 : parseInt(topCard.rank, 10)
+				return wheelMode === 'max' ? cardValue >= topValue : cardValue <= topValue
+			})
+
+			actor.send({type: 'CHOOSE_CARD', cardId: validCard!.id})
+			actor.send({type: 'PLAY_CARD'})
+
+			expect(actor.getSnapshot().value).toMatchObject({
+				playerTurn: 'postCardPlay',
+			})
+
+			const wheelAngleBefore = actor.getSnapshot().context.wheelAngle
+
+			actor.send({type: 'SPIN_WHEEL', force: 0.8})
+
+			expect(actor.getSnapshot().context.wheelAngle).toBe(wheelAngleBefore)
+			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
+		})
+	})
+
 	describe('card effects', () => {
 		it('should play small Ace (value 1) by adding zero-value effect', () => {
 			const gameState = createGameState()

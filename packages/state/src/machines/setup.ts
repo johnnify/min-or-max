@@ -1,5 +1,5 @@
 import {assign, setup} from 'xstate'
-import {Rng} from '@repo/rng'
+import {Rng, shuffle} from '@repo/rng'
 import type {Card, CardRank, PlayedCard, Player} from '../types'
 
 const calculateSpin = (force: number, rng: Rng | null): number => {
@@ -16,15 +16,6 @@ const calculateSpin = (force: number, rng: Rng | null): number => {
 	}
 
 	return 0
-}
-
-const shuffleArray = <T>(array: T[], rng: Rng): T[] => {
-	const shuffled = [...array]
-	for (let i = shuffled.length - 1; i > 0; i--) {
-		const j = rng.nextInt(0, i)
-		;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-	}
-	return shuffled
 }
 
 const getCardValue = (rank: CardRank): number => {
@@ -69,7 +60,7 @@ export const setupMachine = setup({
 		shuffleDeck: assign({
 			drawPile: ({context}) => {
 				if (!context.rng) return context.drawPile
-				return shuffleArray(context.drawPile, context.rng)
+				return shuffle(context.drawPile, context.rng)
 			},
 		}),
 		dealCards: assign(({context}) => {
