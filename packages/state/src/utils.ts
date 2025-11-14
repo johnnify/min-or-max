@@ -68,3 +68,9 @@ export const createPlayedCard = (
 
 export const createStandardDeck = (): Card[] =>
 	CARD_SUITS.flatMap((suit) => CARD_RANKS.map((rank) => createCard(suit, rank)))
+
+export const getCardValue = (rank: CardRank): number => {
+	if (rank === 'A') return 1
+	if (rank === 'J' || rank === 'Q' || rank === 'K') return 10
+	return parseInt(rank, 10)
+}

@@ -1,6 +1,7 @@
 import {assign, setup} from 'xstate'
 import {Rng, shuffle} from '@repo/rng'
-import type {ActiveEffect, Card, CardRank, PlayedCard, Player} from '../types'
+import type {ActiveEffect, Card, PlayedCard, Player} from '../types'
+import {getCardValue} from '../utils'
 
 const calculateSpin = (force: number, rng: Rng | null): number => {
 	if (!rng) return 0
@@ -16,12 +17,6 @@ const calculateSpin = (force: number, rng: Rng | null): number => {
 	}
 
 	return 0
-}
-
-const getCardValue = (rank: CardRank): number => {
-	if (rank === 'A') return 1
-	if (rank === 'J' || rank === 'Q' || rank === 'K') return 10
-	return parseInt(rank, 10)
 }
 
 type PlayingInput = {
