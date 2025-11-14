@@ -1,32 +1,22 @@
 import {and, assign, enqueueActions, setup} from 'xstate'
 import {Rng} from '@repo/rng'
+import {createStandardDeck} from './utils'
 
-export type Player = {
-	id: string
-	name: string
-	isReady: boolean
-	hand: Card[]
-}
-
-export const CARD_SUITS = ['hearts', 'diamonds', 'clubs', 'spades'] as const
-export type CardSuit = (typeof CARD_SUITS)[number]
-
-export const CARD_RANKS = [
-	'2',
-	'3',
-	'4',
-	'5',
-	'6',
-	'7',
-	'8',
-	'9',
-	'10',
-	'J',
-	'Q',
-	'K',
-	'A',
-] as const
-export type CardRank = (typeof CARD_RANKS)[number]
+export type CardSuit = 'hearts' | 'diamonds' | 'clubs' | 'spades'
+export type CardRank =
+	| '2'
+	| '3'
+	| '4'
+	| '5'
+	| '6'
+	| '7'
+	| '8'
+	| '9'
+	| '10'
+	| 'J'
+	| 'Q'
+	| 'K'
+	| 'A'
 
 export type Card = {
 	id: string
@@ -34,14 +24,11 @@ export type Card = {
 	rank: CardRank
 }
 
-const createStandardDeck = (): Card[] => {
-	return CARD_SUITS.flatMap((suit) =>
-		CARD_RANKS.map((rank) => ({
-			id: `${suit}-${rank}`,
-			suit,
-			rank,
-		})),
-	)
+export type Player = {
+	id: string
+	name: string
+	isReady: boolean
+	hand: Card[]
 }
 
 type LobbyContext = {
@@ -467,6 +454,33 @@ export const playingMachine = setup({
 			chosenCardEffect: null,
 		}),
 	},
+	guards: {
+		canBeatTopCard: ({context, event}) => {
+			if (event.type !== 'CHOOSE_CARD') return false
+
+			const currentPlayer = context.players[context.currentPlayerIndex]
+			const chosenCard = currentPlayer.hand.find(
+				(card) => card.id === event.cardId,
+			)
+			if (!chosenCard) return false
+
+			const topCard = context.discardPile[0]
+			if (!topCard) return true
+
+			// Aces beat everything, but can be beaten by anything!
+			if (chosenCard.rank === 'A' || topCard.rank === 'A') return true
+
+			const chosenValue = getCardValue(chosenCard.rank)
+			const topValue = getCardValue(topCard.rank)
+			const wheelMode = context.wheelAngle >= 180 ? 'min' : 'max'
+
+			if (wheelMode === 'max') {
+				return chosenValue >= topValue
+			} else {
+				return chosenValue <= topValue
+			}
+		},
+	},
 }).createMachine({
 	id: 'playing',
 	initial: 'turnStart',
@@ -494,6 +508,7 @@ export const playingMachine = setup({
 						},
 						CHOOSE_CARD: {
 							target: 'processingCard',
+							guard: 'canBeatTopCard',
 							actions: 'setChosenCard',
 						},
 					},

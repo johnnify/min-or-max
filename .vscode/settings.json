@@ -2,14 +2,15 @@
 	"cSpell.words": [
 		"agentic",
 		"autodocs",
-		"minormax",
 		"color",
 		"cyrb128",
 		"flavor",
+		"minormax",
 		"oxlint",
 		"Papaparse",
 		"shadcn",
-		"superform"
+		"superform",
+		"xstate"
 	],
 	"workbench.editor.customLabels.patterns": {
 		"**/src/hooks.{js,ts}": "universal hooks",

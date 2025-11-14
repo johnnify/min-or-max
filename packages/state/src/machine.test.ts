@@ -2,6 +2,7 @@ import {createActor} from 'xstate'
 import {describe, it, expect} from 'vitest'
 import {Rng} from '@repo/rng'
 import {lobbyMachine, setupMachine, playingMachine} from './machine'
+import {createCard} from './utils'
 
 describe('lobbyMachine', () => {
 	it('should start in waiting state with empty players, no rng, and standard deck', () => {
@@ -257,20 +258,18 @@ describe('setupMachine', () => {
 		{id: 'player-2', name: 'Bob', isReady: true, hand: []},
 	]
 
-	const createTestDeck = () => {
-		return [
-			{id: 'hearts-2', suit: 'hearts' as const, rank: '2' as const},
-			{id: 'hearts-3', suit: 'hearts' as const, rank: '3' as const},
-			{id: 'hearts-4', suit: 'hearts' as const, rank: '4' as const},
-			{id: 'hearts-5', suit: 'hearts' as const, rank: '5' as const},
-			{id: 'hearts-6', suit: 'hearts' as const, rank: '6' as const},
-			{id: 'hearts-7', suit: 'hearts' as const, rank: '7' as const},
-			{id: 'hearts-8', suit: 'hearts' as const, rank: '8' as const},
-			{id: 'hearts-9', suit: 'hearts' as const, rank: '9' as const},
-			{id: 'hearts-10', suit: 'hearts' as const, rank: '10' as const},
-			{id: 'hearts-J', suit: 'hearts' as const, rank: 'J' as const},
-		]
-	}
+	const createTestDeck = () => [
+		createCard('hearts', '2'),
+		createCard('hearts', '3'),
+		createCard('hearts', '4'),
+		createCard('hearts', '5'),
+		createCard('hearts', '6'),
+		createCard('hearts', '7'),
+		createCard('hearts', '8'),
+		createCard('hearts', '9'),
+		createCard('hearts', '10'),
+		createCard('hearts', 'J'),
+	]
 
 	it('should shuffle the deck into draw pile with seeded RNG determinism', () => {
 		const testRng = new Rng('shuffle-test-seed')
@@ -503,9 +502,9 @@ describe('playingMachine', () => {
 				name: 'Alice',
 				isReady: true,
 				hand: [
-					{id: 'hearts-5', suit: 'hearts' as const, rank: '5' as const},
-					{id: 'hearts-7', suit: 'hearts' as const, rank: '7' as const},
-					{id: 'hearts-9', suit: 'hearts' as const, rank: '9' as const},
+					createCard('hearts', '5'),
+					createCard('hearts', '7'),
+					createCard('hearts', '9'),
 				],
 			},
 			{
@@ -513,20 +512,18 @@ describe('playingMachine', () => {
 				name: 'Bob',
 				isReady: true,
 				hand: [
-					{id: 'diamonds-4', suit: 'diamonds' as const, rank: '4' as const},
-					{id: 'diamonds-6', suit: 'diamonds' as const, rank: '6' as const},
-					{id: 'diamonds-8', suit: 'diamonds' as const, rank: '8' as const},
+					createCard('diamonds', '4'),
+					createCard('diamonds', '6'),
+					createCard('diamonds', '8'),
 				],
 			},
 		]
 		const drawPile = [
-			{id: 'clubs-2', suit: 'clubs' as const, rank: '2' as const},
-			{id: 'clubs-3', suit: 'clubs' as const, rank: '3' as const},
-			{id: 'clubs-4', suit: 'clubs' as const, rank: '4' as const},
+			createCard('clubs', '2'),
+			createCard('clubs', '3'),
+			createCard('clubs', '4'),
 		]
-		const discardPile = [
-			{id: 'spades-3', suit: 'spades' as const, rank: '3' as const},
-		]
+		const discardPile = [createCard('spades', '3')]
 
 		return {
 			rng,
@@ -671,13 +668,16 @@ describe('playingMachine', () => {
 		actor.send({type: 'TURN_STARTED'})
 		expect(actor.getSnapshot().context.players[1].hand).toHaveLength(4)
 
-		const bobCardToPlay = actor.getSnapshot().context.players[1].hand[0]
-		actor.send({type: 'CHOOSE_CARD', cardId: bobCardToPlay.id})
+		const bobValidCard = actor
+			.getSnapshot()
+			.context.players[1].hand.find((card) => card.id === 'diamonds-6')
+		expect(bobValidCard).toBeDefined()
+		actor.send({type: 'CHOOSE_CARD', cardId: bobValidCard!.id})
 		actor.send({type: 'PLAY_CARD'})
 
 		const scoreAfterBob = actor.getSnapshot().context.currentScore
 		expect(scoreAfterBob).not.toBe(scoreAfterAlice)
-		expect(actor.getSnapshot().context.discardPile[0]).toEqual(bobCardToPlay)
+		expect(actor.getSnapshot().context.discardPile[0]).toEqual(bobValidCard)
 		expect(actor.getSnapshot().context.discardPile[1]).toEqual(aliceCardToPlay)
 
 		actor.send({type: 'END_TURN'})
@@ -702,5 +702,107 @@ describe('playingMachine', () => {
 		expect(actor.getSnapshot().context.wheelAngle).toBeGreaterThan(
 			initialWheelAngle,
 		)
+	})
+
+	it('should prevent playing a card that is too low when wheel is on max mode', () => {
+		const gameState = createGameState()
+		gameState.wheelAngle = 90
+		gameState.discardPile = [createCard('spades', '9')]
+		gameState.players[0].hand = [createCard('hearts', '8'), createCard('hearts', '10')]
+
+		const actor = createActor(playingMachine, {input: gameState}).start()
+		actor.send({type: 'TURN_STARTED'})
+
+		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-8'})
+
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'awaitingAction',
+		})
+		expect(actor.getSnapshot().context.chosenCard).toBe(null)
+	})
+
+	it('should allow playing a card that is equal or higher when wheel is on max mode', () => {
+		const gameState = createGameState()
+		gameState.wheelAngle = 90
+		gameState.discardPile = [createCard('spades', '9')]
+		gameState.players[0].hand = [createCard('hearts', '9'), createCard('hearts', '10')]
+
+		const actor = createActor(playingMachine, {input: gameState}).start()
+		actor.send({type: 'TURN_STARTED'})
+
+		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-9'})
+
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'processingCard',
+		})
+		expect(actor.getSnapshot().context.chosenCard).toEqual(createCard('hearts', '9'))
+	})
+
+	it('should prevent playing a card that is too high when wheel is on min mode', () => {
+		const gameState = createGameState()
+		gameState.wheelAngle = 270
+		gameState.discardPile = [createCard('spades', '5')]
+		gameState.players[0].hand = [createCard('hearts', '6'), createCard('hearts', '4')]
+
+		const actor = createActor(playingMachine, {input: gameState}).start()
+		actor.send({type: 'TURN_STARTED'})
+
+		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-6'})
+
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'awaitingAction',
+		})
+		expect(actor.getSnapshot().context.chosenCard).toBe(null)
+	})
+
+	it('should allow playing a card that is equal or lower when wheel is on min mode', () => {
+		const gameState = createGameState()
+		gameState.wheelAngle = 270
+		gameState.discardPile = [createCard('spades', '5')]
+		gameState.players[0].hand = [createCard('hearts', '5'), createCard('hearts', '4')]
+
+		const actor = createActor(playingMachine, {input: gameState}).start()
+		actor.send({type: 'TURN_STARTED'})
+
+		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-4'})
+
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'processingCard',
+		})
+		expect(actor.getSnapshot().context.chosenCard).toEqual(createCard('hearts', '4'))
+	})
+
+	it('should allow playing an Ace on any card', () => {
+		const gameState = createGameState()
+		gameState.wheelAngle = 90
+		gameState.discardPile = [createCard('spades', 'K')]
+		gameState.players[0].hand = [createCard('hearts', 'A'), createCard('hearts', '2')]
+
+		const actor = createActor(playingMachine, {input: gameState}).start()
+		actor.send({type: 'TURN_STARTED'})
+
+		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-A'})
+
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'processingCard',
+		})
+		expect(actor.getSnapshot().context.chosenCard?.rank).toBe('A')
+	})
+
+	it('should allow playing any card on top of an Ace', () => {
+		const gameState = createGameState()
+		gameState.wheelAngle = 90
+		gameState.discardPile = [createCard('spades', 'A')]
+		gameState.players[0].hand = [createCard('hearts', '2'), createCard('hearts', 'K')]
+
+		const actor = createActor(playingMachine, {input: gameState}).start()
+		actor.send({type: 'TURN_STARTED'})
+
+		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-2'})
+
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'processingCard',
+		})
+		expect(actor.getSnapshot().context.chosenCard).toEqual(createCard('hearts', '2'))
 	})
 })
