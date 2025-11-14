@@ -1,4 +1,12 @@
-import type {Card, CardSuit, CardRank, CardEffect, PlayedCard} from './types'
+import type {Rng} from '@repo/rng'
+import type {
+	Card,
+	CardSuit,
+	CardRank,
+	CardEffect,
+	PlayedCard,
+	Player,
+} from './types'
 
 export const CARD_SUITS: readonly CardSuit[] = [
 	'hearts',
@@ -73,4 +81,38 @@ export const getCardValue = (rank: CardRank): number => {
 	if (rank === 'A') return 1
 	if (rank === 'J' || rank === 'Q' || rank === 'K') return 10
 	return parseInt(rank, 10)
+}
+
+export const calculateSpin = (force: number, rng: Rng | null): number => {
+	if (!rng) return 0
+
+	if (force >= 0 && force <= 0.1) {
+		return rng.nextInt(15, 90)
+	} else if (force <= 0.5) {
+		return rng.nextInt(45, 180)
+	} else if (force <= 0.999) {
+		return rng.nextInt(90, 360)
+	} else {
+		return rng.nextInt(360, 2880)
+	}
+}
+
+export const calculateCurrentPlayerWins = (
+	players: Player[],
+	currentPlayerIndex: number,
+) => {
+	const winner = players[currentPlayerIndex]
+	const losers = players.filter((p) => p.id !== winner.id)
+	return {winner, losers}
+}
+
+export const calculatePreviousPlayerWins = (
+	players: Player[],
+	currentPlayerIndex: number,
+) => {
+	const previousPlayerIndex =
+		(currentPlayerIndex - 1 + players.length) % players.length
+	const winner = players[previousPlayerIndex]
+	const losers = players.filter((p) => p.id !== winner.id)
+	return {winner, losers}
 }

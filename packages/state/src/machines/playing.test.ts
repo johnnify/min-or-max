@@ -641,6 +641,130 @@ describe('playingMachine', () => {
 		})
 	})
 
+	describe('state serialization', () => {
+		it('should serialize and restore RNG state for deterministic gameplay', () => {
+			const gameState = createGameState()
+			const actor = createActor(playingMachine, {input: gameState}).start()
+
+			actor.send({type: 'TURN_STARTED'})
+			actor.send({type: 'SPIN_WHEEL', force: 0.5})
+
+			const snapshot1 = actor.getSnapshot()
+			const rngData = snapshot1.context.rng!.toJSON()
+			const wheelAngleBeforeSerialization = snapshot1.context.wheelAngle
+
+			const restoredRng = Rng.fromJSON(rngData)
+
+			const nextValuesOriginal = [
+				snapshot1.context.rng!.next(),
+				snapshot1.context.rng!.next(),
+				snapshot1.context.rng!.next(),
+			]
+
+			const nextValuesRestored = [
+				restoredRng.next(),
+				restoredRng.next(),
+				restoredRng.next(),
+			]
+
+			expect(nextValuesRestored).toEqual(nextValuesOriginal)
+			expect(restoredRng.seed).toBe(snapshot1.context.rng!.seed)
+			expect(restoredRng.callCount).toBe(snapshot1.context.rng!.callCount)
+
+			const restoredGameState = {
+				...snapshot1.context,
+				rng: restoredRng,
+			}
+
+			const actor2 = createActor(playingMachine, {
+				input: restoredGameState,
+			}).start()
+
+			expect(actor2.getSnapshot().context.wheelAngle).toBe(
+				wheelAngleBeforeSerialization,
+			)
+			expect(actor2.getSnapshot().context.currentScore).toBe(
+				snapshot1.context.currentScore,
+			)
+		})
+	})
+
+	describe('surrender conditions', () => {
+		it('should transition to gameOver when player surrenders', () => {
+			const gameState = createGameState()
+			const actor = createActor(playingMachine, {input: gameState}).start()
+
+			actor.send({type: 'TURN_STARTED'})
+			expect(actor.getSnapshot().value).toMatchObject({
+				playerTurn: 'awaitingAction',
+			})
+
+			actor.send({type: 'SURRENDER'})
+
+			expect(actor.getSnapshot().value).toBe('gameOver')
+			expect(actor.getSnapshot().context.winner?.id).toBe('player-2')
+			expect(actor.getSnapshot().context.losers).toHaveLength(1)
+			expect(actor.getSnapshot().context.losers[0].id).toBe('player-1')
+			expect(actor.getSnapshot().context.reason).toBe('surrendered')
+		})
+
+		it('should handle surrender with multiple players correctly', () => {
+			const gameState = createGameState()
+			gameState.players = [
+				{
+					id: 'player-1',
+					name: 'Alice',
+					isReady: true,
+					hand: [createCard('hearts', '5')],
+				},
+				{
+					id: 'player-2',
+					name: 'Bob',
+					isReady: true,
+					hand: [createCard('diamonds', '6')],
+				},
+				{
+					id: 'player-3',
+					name: 'Charlie',
+					isReady: true,
+					hand: [createCard('clubs', '7')],
+				},
+			]
+			gameState.currentPlayerIndex = 1
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+
+			actor.send({type: 'TURN_STARTED'})
+			actor.send({type: 'SURRENDER'})
+
+			expect(actor.getSnapshot().value).toBe('gameOver')
+			expect(actor.getSnapshot().context.winner?.id).toBe('player-1')
+			expect(actor.getSnapshot().context.losers).toHaveLength(2)
+			expect(
+				actor
+					.getSnapshot()
+					.context.losers.map((p) => p.id)
+					.sort(),
+			).toEqual(['player-2', 'player-3'])
+			expect(actor.getSnapshot().context.reason).toBe('surrendered')
+		})
+
+		it('should handle surrender when first player (index 0) surrenders', () => {
+			const gameState = createGameState()
+			gameState.currentPlayerIndex = 0
+
+			const actor = createActor(playingMachine, {input: gameState}).start()
+
+			actor.send({type: 'TURN_STARTED'})
+			actor.send({type: 'SURRENDER'})
+
+			expect(actor.getSnapshot().value).toBe('gameOver')
+			expect(actor.getSnapshot().context.winner?.id).toBe('player-2')
+			expect(actor.getSnapshot().context.losers[0].id).toBe('player-1')
+			expect(actor.getSnapshot().context.reason).toBe('surrendered')
+		})
+	})
+
 	describe('card effects', () => {
 		it('should play small Ace (value 1) by adding zero-value effect', () => {
 			const gameState = createGameState()

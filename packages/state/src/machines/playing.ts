@@ -1,23 +1,12 @@
 import {assign, setup} from 'xstate'
 import {Rng, shuffle} from '@repo/rng'
 import type {ActiveEffect, Card, PlayedCard, Player} from '../types'
-import {getCardValue} from '../utils'
-
-const calculateSpin = (force: number, rng: Rng | null): number => {
-	if (!rng) return 0
-
-	if (force >= 0 && force <= 0.1) {
-		return rng.nextInt(15, 90)
-	} else if (force >= 0.26 && force <= 0.5) {
-		return rng.nextInt(45, 180)
-	} else if (force >= 0.51 && force <= 0.999) {
-		return rng.nextInt(90, 360)
-	} else if (force === 1) {
-		return rng.nextInt(360, 2880)
-	}
-
-	return 0
-}
+import {
+	calculateSpin,
+	getCardValue,
+	calculateCurrentPlayerWins,
+	calculatePreviousPlayerWins,
+} from '../utils'
 
 type PlayingInput = {
 	rng: Rng
@@ -37,7 +26,7 @@ type PlayingContext = PlayingInput & {
 	activeEffects: ActiveEffect[]
 	winner: Player | null
 	losers: Player[]
-	reason: 'exact_threshold' | 'exceeded_threshold' | null
+	reason: 'exact_threshold' | 'exceeded_threshold' | 'surrendered' | null
 }
 
 type PlayingEvents =
@@ -48,6 +37,7 @@ type PlayingEvents =
 	| {type: 'SEARCH_AND_DRAW'; rank: 'J' | 'Q' | 'K'}
 	| {type: 'PLAY_CARD'}
 	| {type: 'END_TURN'}
+	| {type: 'SURRENDER'}
 
 export const playingMachine = setup({
 	types: {
@@ -210,28 +200,32 @@ export const playingMachine = setup({
 				context.currentScore > context.maxThreshold
 
 			if (isExact) {
-				const winner = context.players[context.currentPlayerIndex]
-				const losers = context.players.filter((p) => p.id !== winner.id)
 				return {
-					winner,
-					losers,
+					...calculateCurrentPlayerWins(
+						context.players,
+						context.currentPlayerIndex,
+					),
 					reason: 'exact_threshold' as const,
 				}
 			} else if (isOver) {
-				const previousPlayerIndex =
-					(context.currentPlayerIndex - 1 + context.players.length) %
-					context.players.length
-				const winner = context.players[previousPlayerIndex]
-				const losers = context.players.filter((p) => p.id !== winner.id)
 				return {
-					winner,
-					losers,
+					...calculatePreviousPlayerWins(
+						context.players,
+						context.currentPlayerIndex,
+					),
 					reason: 'exceeded_threshold' as const,
 				}
 			}
 
 			return {}
 		}),
+		setWinnerForSurrender: assign(({context}) => ({
+			...calculatePreviousPlayerWins(
+				context.players,
+				context.currentPlayerIndex,
+			),
+			reason: 'surrendered' as const,
+		})),
 	},
 	guards: {
 		canBeatTopCard: ({context, event}) => {
@@ -312,6 +306,10 @@ export const playingMachine = setup({
 							target: 'processingCard',
 							guard: 'canBeatTopCard',
 							actions: 'setChosenCard',
+						},
+						SURRENDER: {
+							target: '#playing.gameOver',
+							actions: 'setWinnerForSurrender',
 						},
 					},
 				},

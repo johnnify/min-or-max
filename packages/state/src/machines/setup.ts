@@ -1,23 +1,7 @@
 import {assign, setup} from 'xstate'
 import {Rng, shuffle} from '@repo/rng'
 import type {Card, PlayedCard, Player} from '../types'
-import {getCardValue} from '../utils'
-
-const calculateSpin = (force: number, rng: Rng | null): number => {
-	if (!rng) return 0
-
-	if (force >= 0 && force <= 0.1) {
-		return rng.nextInt(15, 90)
-	} else if (force >= 0.26 && force <= 0.5) {
-		return rng.nextInt(45, 180)
-	} else if (force >= 0.51 && force <= 0.999) {
-		return rng.nextInt(90, 360)
-	} else if (force === 1) {
-		return rng.nextInt(360, 2880)
-	}
-
-	return 0
-}
+import {calculateSpin, getCardValue} from '../utils'
 
 type SetupContext = {
 	players: Player[]
