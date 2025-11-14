@@ -1,2 +1,3 @@
-export * from './machine'
+export * from './machines'
+export * from './types'
 export * from './utils'

@@ -1,4 +1,4 @@
-import type {Card, CardSuit, CardRank} from './machine'
+import type {Card, CardSuit, CardRank, CardEffect, PlayedCard} from './types'
 
 export const CARD_SUITS: readonly CardSuit[] = [
 	'hearts',
@@ -22,10 +22,48 @@ export const CARD_RANKS: readonly CardRank[] = [
 	'A',
 ]
 
-export const createCard = (suit: CardSuit, rank: CardRank): Card => ({
-	id: `${suit}-${rank}`,
-	suit,
-	rank,
+export const lowOrHighAceEffect: CardEffect = {
+	type: 'choice',
+	name: 'Biggy Smalls',
+	description: 'Choose whether the value of this Ace is 1 or 11!',
+}
+
+export const findFaceCardEffect: CardEffect = {
+	type: 'choice',
+	name: 'Courtship',
+	description: 'Try to draw your choice of a date!',
+}
+
+export const createCard = (
+	suit: CardSuit,
+	rank: CardRank,
+	effect?: CardEffect,
+): Card => {
+	const id = `${suit}-${rank}`
+
+	if (effect !== undefined) {
+		return {id, suit, rank, effect}
+	}
+
+	if (rank === 'A') {
+		return {id, suit, rank, effect: lowOrHighAceEffect}
+	}
+
+	if (rank === 'J') {
+		return {id, suit, rank, effect: findFaceCardEffect}
+	}
+
+	return {id, suit, rank}
+}
+
+export const createPlayedCard = (
+	card: Card,
+	playedValue: number,
+	playedBy: string | null = 'player-1',
+): PlayedCard => ({
+	card,
+	playedValue,
+	playedBy,
 })
 
 export const createStandardDeck = (): Card[] =>
