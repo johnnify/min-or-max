@@ -1,9 +1,9 @@
 import {assign, setup} from 'xstate'
 import {Rng, shuffle} from '@repo/rng'
-import type {Card, PlayedCard, Player} from '../types'
+import type {Card, PlayedCard, Player, SetupEvent} from '../types'
 import {calculateSpin, getCardValue} from '../utils'
 
-type SetupContext = {
+export type SetupContext = {
 	players: Player[]
 	drawPile: Card[]
 	discardPile: PlayedCard[]
@@ -20,20 +20,11 @@ export type SetupInput = {
 	deck: Card[]
 }
 
-type SetupEvents =
-	| {type: 'SHUFFLE_PILE'; pile: 'draw' | 'discard'}
-	| {type: 'PILE_SHUFFLED'}
-	| {type: 'CARDS_DEALT'}
-	| {type: 'THRESHOLDS_SET'}
-	| {type: 'WHEEL_SPUN'; force: number}
-	| {type: 'FIRST_CARD_PLAYED'}
-	| {type: 'SETUP_COMPLETE'}
-
 export const setupMachine = setup({
 	types: {
 		input: {} as SetupInput,
 		context: {} as SetupContext,
-		events: {} as SetupEvents,
+		events: {} as SetupEvent,
 	},
 	actions: {
 		shuffleDeck: assign({

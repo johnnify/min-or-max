@@ -33,6 +33,6 @@
 	],
 
 	"vars": {
-		"ALLOWED_ORIGINS": "https://min-or-max.j-e7c.workers.dev",
+		"ALLOWED_ORIGINS": "",
 	},
 }

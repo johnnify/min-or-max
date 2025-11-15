@@ -1,20 +1,14 @@
 import {createActor, type AnyActorRef} from 'xstate'
-import type {GamePhase} from '@repo/state'
-import {
-	lobbyMachine,
-	setupMachine,
-	playingMachine,
-	type SetupInput,
-	type PlayingInput,
-} from '@repo/state'
+import type {GamePhase, GameEvent} from '@repo/state'
+import {lobbyMachine, setupMachine, playingMachine} from '@repo/state'
 import type {
 	ClientMessage,
 	ServerMessage,
 	PlayerInfo,
 	StoredEvent,
 } from './types'
-
-type GameEvent = {type: string; [key: string]: unknown}
+import {canPlayerSendEvent} from './orchestrator/validation'
+import {getNextPhase, createTransitionInput} from './orchestrator/transitions'
 
 // TODO: Hard to test without Vitest v4 support:
 // https://github.com/cloudflare/workers-sdk/issues/11064
@@ -22,6 +16,7 @@ export class GameRoom implements DurableObject {
 	private currentPhase: GamePhase = 'lobby'
 	private currentActor: AnyActorRef | null = null
 	private players: Map<WebSocket, PlayerInfo> = new Map()
+	private playerRegistry: Map<string, PlayerInfo> = new Map()
 
 	constructor(private ctx: DurableObjectState) {
 		void this.ctx.blockConcurrencyWhile(async () => {
@@ -58,8 +53,15 @@ export class GameRoom implements DurableObject {
 				}
 			}
 
+			if (data.type === 'PLAY_AGAIN') {
+				await this.resetToLobby()
+				return
+			}
+
 			if (data.type === 'JOIN_GAME') {
-				playerInfo = {
+				const existingPlayer = this.playerRegistry.get(data.playerId)
+
+				playerInfo = existingPlayer || {
 					playerId: data.playerId,
 					playerName: data.playerName,
 					roomId: this.ctx.id.toString(),
@@ -67,20 +69,31 @@ export class GameRoom implements DurableObject {
 				}
 
 				this.players.set(ws, playerInfo)
+				this.playerRegistry.set(data.playerId, playerInfo)
 				ws.serializeAttachment({...playerInfo})
 
-				await this.storeEvent({
-					type: data.type,
-					playerId: playerInfo.playerId,
-					data: JSON.stringify(data),
-					timestamp: performance.now(),
-				})
+				if (!existingPlayer) {
+					this.ctx.storage.sql.exec(
+						`INSERT OR REPLACE INTO player_registry (player_id, player_name, joined_at) VALUES (?, ?, ?)`,
+						playerInfo.playerId,
+						playerInfo.playerName,
+						playerInfo.joinedAt,
+					)
 
-				this.broadcast({
-					type: 'PLAYER_JOINED',
-					playerId: playerInfo.playerId,
-					playerName: playerInfo.playerName,
-				})
+					if (this.currentActor && this.currentPhase === 'lobby') {
+						this.currentActor.send({
+							type: 'PLAYER_JOINED',
+							playerId: playerInfo.playerId,
+							playerName: playerInfo.playerName,
+						} as GameEvent)
+					}
+
+					this.broadcast({
+						type: 'PLAYER_JOINED',
+						playerId: playerInfo.playerId,
+						playerName: playerInfo.playerName,
+					})
+				}
 
 				ws.send(
 					JSON.stringify({
@@ -113,13 +126,6 @@ export class GameRoom implements DurableObject {
 				return
 			}
 
-			await this.storeEvent({
-				type: data.type,
-				playerId: playerInfo.playerId,
-				data: JSON.stringify(data),
-				timestamp: performance.now(),
-			})
-
 			await this.handleEvent(data, playerInfo)
 		} catch (error) {
 			console.error('Error handling WebSocket message:', error)
@@ -142,7 +148,7 @@ export class GameRoom implements DurableObject {
 		if (playerInfo) {
 			this.players.delete(ws)
 
-			await this.storeEvent({
+			await this.storeTelemetryEvent({
 				type: 'PLAYER_DISCONNECTED',
 				playerId: playerInfo.playerId,
 				data: JSON.stringify({code, reason, wasClean}),
@@ -162,19 +168,18 @@ export class GameRoom implements DurableObject {
 
 	private async initializeTables() {
 		this.ctx.storage.sql.exec(`
-			CREATE TABLE IF NOT EXISTS game_events (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				type TEXT NOT NULL,
-				playerId TEXT,
-				data TEXT NOT NULL,
-				timestamp REAL NOT NULL
+			CREATE TABLE IF NOT EXISTS game_state (
+				key TEXT PRIMARY KEY,
+				value TEXT NOT NULL,
+				updated_at REAL NOT NULL
 			)
 		`)
 
 		this.ctx.storage.sql.exec(`
-			CREATE TABLE IF NOT EXISTS game_metadata (
-				key TEXT PRIMARY KEY,
-				value TEXT NOT NULL
+			CREATE TABLE IF NOT EXISTS player_registry (
+				player_id TEXT PRIMARY KEY,
+				player_name TEXT NOT NULL,
+				joined_at REAL NOT NULL
 			)
 		`)
 
@@ -190,94 +195,58 @@ export class GameRoom implements DurableObject {
 	}
 
 	private async restoreState() {
-		const phaseResult = this.ctx.storage.sql
+		const phaseResults = this.ctx.storage.sql
 			.exec<{
 				value: string
-			}>(`SELECT value FROM game_metadata WHERE key = 'phase'`)
-			.one()
-
-		if (!phaseResult) {
-			this.currentPhase = 'lobby'
-			this.currentActor = createActor(lobbyMachine)
-			this.currentActor.start()
-
-			this.ctx.storage.sql.exec(
-				`INSERT INTO game_metadata (key, value) VALUES ('phase', 'lobby')`,
-			)
-
-			this.subscribeToStateChanges()
-		} else {
-			this.currentPhase = phaseResult.value as GamePhase
-			await this.replayEvents()
-		}
-	}
-
-	private async replayEvents() {
-		const events = this.ctx.storage.sql
-			.exec<StoredEvent>(
-				`
-			SELECT * FROM game_events ORDER BY id ASC
-		`,
-			)
+			}>(`SELECT value FROM game_state WHERE key = 'phase'`)
 			.toArray()
 
-		if (events.length === 0) {
-			this.currentActor = createActor(lobbyMachine)
-			this.currentActor.start()
-			this.subscribeToStateChanges()
-			return
+		const snapshotResults = this.ctx.storage.sql
+			.exec<{
+				value: string
+			}>(`SELECT value FROM game_state WHERE key = 'snapshot'`)
+			.toArray()
+
+		const playersResults = this.ctx.storage.sql
+			.exec<{
+				player_id: string
+				player_name: string
+				joined_at: number
+			}>(`SELECT * FROM player_registry`)
+			.toArray()
+
+		for (const player of playersResults) {
+			this.playerRegistry.set(player.player_id, {
+				playerId: player.player_id,
+				playerName: player.player_name,
+				roomId: this.ctx.id.toString(),
+				joinedAt: player.joined_at,
+			})
 		}
 
-		let lobbyContext: SetupInput | null = null
-		let setupContext: PlayingInput | null = null
+		if (phaseResults.length === 0) {
+			this.currentPhase = 'lobby'
+			this.currentActor = createActor(lobbyMachine)
+			this.subscribeToStateChanges()
+			this.currentActor.start()
 
-		for (const event of events) {
-			const parsedData = JSON.parse(event.data) as ClientMessage
+			await this.saveState()
+		} else {
+			this.currentPhase = phaseResults[0].value as GamePhase
+			const snapshot =
+				snapshotResults.length > 0 ? JSON.parse(snapshotResults[0].value) : null
 
 			if (this.currentPhase === 'lobby') {
-				if (!this.currentActor) {
-					this.currentActor = createActor(lobbyMachine)
-					this.currentActor.start()
-				}
-
-				if (parsedData.type === 'START_GAME') {
-					lobbyContext = this.currentActor.getSnapshot().context as SetupInput
-					this.currentPhase = 'setup'
-				} else {
-					this.currentActor.send(parsedData as GameEvent)
-				}
+				this.currentActor = createActor(lobbyMachine)
 			} else if (this.currentPhase === 'setup') {
-				if (!this.currentActor && lobbyContext) {
-					this.currentActor = createActor(setupMachine, {
-						input: lobbyContext,
-					})
-					this.currentActor.start()
-				}
-
-				if (parsedData.type === 'TURN_STARTED') {
-					if (this.currentActor) {
-						setupContext = this.currentActor.getSnapshot()
-							.context as PlayingInput
-					}
-					this.currentPhase = 'playing'
-				} else if (this.currentActor) {
-					this.currentActor.send(parsedData as GameEvent)
-				}
+				this.currentActor = createActor(setupMachine, {input: snapshot})
 			} else if (this.currentPhase === 'playing') {
-				if (!this.currentActor && setupContext) {
-					this.currentActor = createActor(playingMachine, {
-						input: setupContext,
-					})
-					this.currentActor.start()
-				}
-
-				if (this.currentActor) {
-					this.currentActor.send(parsedData as GameEvent)
-				}
+				this.currentActor = createActor(playingMachine, {input: snapshot})
 			}
-		}
 
-		this.subscribeToStateChanges()
+			this.subscribeToStateChanges()
+			this.currentActor?.start()
+		}
 	}
 
 	private subscribeToStateChanges() {
@@ -299,61 +268,16 @@ export class GameRoom implements DurableObject {
 	private async handleEvent(event: ClientMessage, playerInfo: PlayerInfo) {
 		if (!this.currentActor) return
 
-		if (event.type === 'START_GAME' && this.currentPhase === 'lobby') {
-			const lobbyContext = this.currentActor.getSnapshot().context as SetupInput
+		let gameEvent: GameEvent
 
-			this.currentActor.send({type: 'START_GAME'} as GameEvent)
-
-			await new Promise((resolve) => setTimeout(resolve, 0))
-
-			this.currentActor = createActor(setupMachine, {
-				input: lobbyContext,
-			})
-			this.currentActor.start()
-			this.currentPhase = 'setup'
-
-			this.ctx.storage.sql.exec(
-				`UPDATE game_metadata SET value = 'setup' WHERE key = 'phase'`,
-			)
-
-			this.subscribeToStateChanges()
-
-			await this.storeTelemetryEvent({
-				type: 'PHASE_TRANSITION',
+		if (event.type === 'READY') {
+			gameEvent = {
+				type: 'PLAYER_READY',
 				playerId: playerInfo.playerId,
-				data: JSON.stringify({from: 'lobby', to: 'setup'}),
-				timestamp: performance.now(),
-			})
-		} else if (event.type === 'TURN_STARTED' && this.currentPhase === 'setup') {
-			const setupContext = this.currentActor.getSnapshot()
-				.context as PlayingInput
-
-			this.currentActor.send({type: 'TURN_STARTED'} as GameEvent)
-
-			await new Promise((resolve) => setTimeout(resolve, 0))
-
-			this.currentActor = createActor(playingMachine, {
-				input: setupContext,
-			})
-			this.currentActor.start()
-			this.currentPhase = 'playing'
-
-			this.ctx.storage.sql.exec(
-				`UPDATE game_metadata SET value = 'playing' WHERE key = 'phase'`,
-			)
-
-			this.subscribeToStateChanges()
-
-			await this.storeTelemetryEvent({
-				type: 'PHASE_TRANSITION',
-				playerId: playerInfo.playerId,
-				data: JSON.stringify({from: 'setup', to: 'playing'}),
-				timestamp: performance.now(),
-			})
-		} else if (
-			event.type === 'REQUEST_AUTO_PLAY' &&
-			this.currentPhase === 'playing'
-		) {
+			}
+		} else if (event.type === 'START_GAME') {
+			gameEvent = {type: 'START_GAME'}
+		} else if (event.type === 'REQUEST_AUTO_PLAY') {
 			const snapshot = this.currentActor.getSnapshot()
 			const context = snapshot.context as {
 				currentPlayerIndex: number
@@ -370,10 +294,10 @@ export class GameRoom implements DurableObject {
 			const validCard = currentPlayer.hand[0]
 
 			if (validCard) {
-				this.currentActor.send({
+				gameEvent = {
 					type: 'CHOOSE_CARD',
 					cardId: validCard.id,
-				} as GameEvent)
+				}
 
 				this.broadcast({
 					type: 'AUTO_PLAY',
@@ -388,7 +312,7 @@ export class GameRoom implements DurableObject {
 				})
 			} else if (!context.hasSpunThisTurn) {
 				const force = 0.5
-				this.currentActor.send({type: 'SPIN_WHEEL', force} as GameEvent)
+				gameEvent = {type: 'SPIN_WHEEL', force}
 
 				this.broadcast({
 					type: 'AUTO_SPIN',
@@ -402,7 +326,7 @@ export class GameRoom implements DurableObject {
 					timestamp: performance.now(),
 				})
 			} else {
-				this.currentActor.send({type: 'SURRENDER'} as GameEvent)
+				gameEvent = {type: 'SURRENDER'}
 
 				this.broadcast({
 					type: 'PLAYER_SURRENDERED',
@@ -417,8 +341,117 @@ export class GameRoom implements DurableObject {
 				})
 			}
 		} else {
-			this.currentActor.send(event as GameEvent)
+			gameEvent = event as GameEvent
 		}
+
+		const snapshot = this.currentActor.getSnapshot()
+		const validation = canPlayerSendEvent(
+			snapshot,
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			gameEvent as any,
+			playerInfo.playerId,
+		)
+
+		if (!validation.allowed) {
+			await this.storeTelemetryEvent({
+				type: 'EVENT_REJECTED',
+				playerId: playerInfo.playerId,
+				data: JSON.stringify({event: gameEvent, reason: validation.reason}),
+				timestamp: performance.now(),
+			})
+			return
+		}
+
+		this.currentActor.send(gameEvent)
+
+		await this.checkAndHandleTransition(playerInfo)
+		await this.saveState()
+	}
+
+	private async checkAndHandleTransition(playerInfo: PlayerInfo) {
+		if (!this.currentActor) return
+
+		const snapshot = this.currentActor.getSnapshot()
+		const nextPhase = getNextPhase(snapshot)
+
+		if (!nextPhase || nextPhase === this.currentPhase) return
+
+		if (nextPhase === 'setup') {
+			const input = createTransitionInput('setup', snapshot)
+			if (!input) return
+
+			if ('deck' in input) {
+				this.currentPhase = 'setup'
+				this.currentActor = createActor(setupMachine, {input})
+				this.subscribeToStateChanges()
+				this.currentActor.start()
+
+				await this.storeTelemetryEvent({
+					type: 'PHASE_TRANSITION',
+					playerId: playerInfo.playerId,
+					data: JSON.stringify({from: 'lobby', to: 'setup'}),
+					timestamp: performance.now(),
+				})
+
+				this.currentActor.send({type: 'PILE_SHUFFLED'})
+				this.currentActor.send({type: 'CARDS_DEALT'})
+				this.currentActor.send({type: 'THRESHOLDS_SET'})
+				this.currentActor.send({type: 'WHEEL_SPUN', force: 0.8})
+				this.currentActor.send({type: 'FIRST_CARD_PLAYED'})
+
+				await this.checkAndHandleTransition(playerInfo)
+			}
+		} else if (nextPhase === 'playing') {
+			const input = createTransitionInput('playing', snapshot)
+			if (!input) return
+
+			if ('drawPile' in input) {
+				this.currentPhase = 'playing'
+				this.currentActor = createActor(playingMachine, {input})
+				this.subscribeToStateChanges()
+				this.currentActor.start()
+
+				await this.storeTelemetryEvent({
+					type: 'PHASE_TRANSITION',
+					playerId: playerInfo.playerId,
+					data: JSON.stringify({from: 'setup', to: 'playing'}),
+					timestamp: performance.now(),
+				})
+			}
+		} else if (nextPhase === 'gameOver') {
+			this.currentPhase = 'gameOver'
+
+			await this.storeTelemetryEvent({
+				type: 'PHASE_TRANSITION',
+				playerId: playerInfo.playerId,
+				data: JSON.stringify({from: 'playing', to: 'gameOver'}),
+				timestamp: performance.now(),
+			})
+		}
+
+		await this.saveState()
+	}
+
+	private async saveState() {
+		if (!this.currentActor) return
+
+		const snapshot = this.currentActor.getSnapshot()
+		const snapshotJson = JSON.stringify(snapshot.context)
+		const timestamp = performance.now()
+
+		this.ctx.storage.sql.exec(
+			`INSERT OR REPLACE INTO game_state (key, value, updated_at) VALUES (?, ?, ?)`,
+			'phase',
+			this.currentPhase,
+			timestamp,
+		)
+
+		this.ctx.storage.sql.exec(
+			`INSERT OR REPLACE INTO game_state (key, value, updated_at) VALUES (?, ?, ?)`,
+			'snapshot',
+			snapshotJson,
+			timestamp,
+		)
 	}
 
 	private broadcast(message: ServerMessage, exclude?: WebSocket) {
@@ -431,16 +464,6 @@ export class GameRoom implements DurableObject {
 		}
 	}
 
-	private async storeEvent(event: Omit<StoredEvent, 'id'>) {
-		this.ctx.storage.sql.exec(
-			`INSERT INTO game_events (type, playerId, data, timestamp) VALUES (?, ?, ?, ?)`,
-			event.type,
-			event.playerId,
-			event.data,
-			event.timestamp,
-		)
-	}
-
 	private async storeTelemetryEvent(event: Omit<StoredEvent, 'id'>) {
 		this.ctx.storage.sql.exec(
 			`INSERT INTO telemetry_events (type, playerId, data, timestamp) VALUES (?, ?, ?, ?)`,
@@ -449,5 +472,34 @@ export class GameRoom implements DurableObject {
 			event.data,
 			event.timestamp,
 		)
+	}
+
+	private async resetToLobby() {
+		this.currentPhase = 'lobby'
+		this.currentActor = createActor(lobbyMachine)
+		this.subscribeToStateChanges()
+		this.currentActor.start()
+
+		const registeredPlayers = Array.from(this.playerRegistry.values())
+		for (const player of registeredPlayers) {
+			this.currentActor.send({
+				type: 'PLAYER_JOINED',
+				playerId: player.playerId,
+				playerName: player.playerName,
+			})
+			this.currentActor.send({
+				type: 'PLAYER_READY',
+				playerId: player.playerId,
+			})
+		}
+
+		await this.saveState()
+
+		await this.storeTelemetryEvent({
+			type: 'GAME_RESET',
+			playerId: null,
+			data: JSON.stringify({playerCount: registeredPlayers.length}),
+			timestamp: performance.now(),
+		})
 	}
 }

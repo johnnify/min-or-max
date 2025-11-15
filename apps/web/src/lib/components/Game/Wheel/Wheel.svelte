@@ -6,18 +6,22 @@
 
 	type Props = {
 		angle: number
+		onclick?: () => void
+		disabled?: boolean
 	}
 
-	let {angle}: Props = $props()
+	let {angle, onclick, disabled}: Props = $props()
 
 	const deriveModeFromAngle = (angle: number) => {
 		const normalizedAngle = angle % 360
 		return normalizedAngle < 180 ? 'MIN' : 'MAX'
 	}
-	let mode = deriveModeFromAngle(angle)
+	let mode = $derived(deriveModeFromAngle(angle))
 </script>
 
 <button
+	{onclick}
+	{disabled}
 	class={cn(
 		buttonVariants.base,
 		'bg-card border-border flex size-32 flex-col rounded-full border',
@@ -30,6 +34,6 @@
 	{:else}
 		<MaxIcon />
 
-		<span> Min </span>
+		<span> Max </span>
 	{/if}
 </button>

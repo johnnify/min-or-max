@@ -17,7 +17,7 @@
 		"codegen": {},
 		"build": {
 			"inputs": ["$TURBO_DEFAULT$", "**/.env*"],
-			"outputs": ["build/**"]
+			"outputs": ["build/**", ".svelte-kit/output/**"]
 		}
 	}
 }

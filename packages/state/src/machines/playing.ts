@@ -1,6 +1,12 @@
 import {assign, setup} from 'xstate'
 import {Rng, shuffle} from '@repo/rng'
-import type {ActiveEffect, Card, PlayedCard, Player} from '../types'
+import type {
+	ActiveEffect,
+	Card,
+	PlayedCard,
+	Player,
+	PlayingEvent,
+} from '../types'
 import {
 	calculateSpin,
 	getCardValue,
@@ -21,7 +27,7 @@ export type PlayingInput = {
 	hasSpunThisTurn: boolean
 }
 
-type PlayingContext = PlayingInput & {
+export type PlayingContext = PlayingInput & {
 	chosenCard: Card | null
 	activeEffects: ActiveEffect[]
 	winner: Player | null
@@ -29,21 +35,11 @@ type PlayingContext = PlayingInput & {
 	reason: 'exact_threshold' | 'exceeded_threshold' | 'surrendered' | null
 }
 
-type PlayingEvents =
-	| {type: 'TURN_STARTED'}
-	| {type: 'SPIN_WHEEL'; force: number}
-	| {type: 'CHOOSE_CARD'; cardId: string}
-	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
-	| {type: 'SEARCH_AND_DRAW'; rank: 'J' | 'Q' | 'K'}
-	| {type: 'PLAY_CARD'}
-	| {type: 'END_TURN'}
-	| {type: 'SURRENDER'}
-
 export const playingMachine = setup({
 	types: {
 		input: {} as PlayingInput,
 		context: {} as PlayingContext,
-		events: {} as PlayingEvents,
+		events: {} as PlayingEvent,
 	},
 	actions: {
 		reshuffleDiscardIntoDraw: assign(({context}) => {
@@ -287,11 +283,9 @@ export const playingMachine = setup({
 	}),
 	states: {
 		turnStart: {
-			on: {
-				TURN_STARTED: {
-					target: 'playerTurn',
-					actions: ['reshuffleDiscardIntoDraw', 'drawCardForCurrentPlayer'],
-				},
+			always: {
+				target: 'playerTurn',
+				actions: ['reshuffleDiscardIntoDraw', 'drawCardForCurrentPlayer'],
 			},
 		},
 		playerTurn: {

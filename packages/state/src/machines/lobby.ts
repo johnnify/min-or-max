@@ -1,9 +1,9 @@
 import {and, assign, enqueueActions, setup} from 'xstate'
 import {Rng} from '@repo/rng'
 import {createStandardDeck} from '../utils'
-import type {Card, Player} from '../types'
+import type {Card, Player, LobbyEvent} from '../types'
 
-type LobbyContext = {
+export type LobbyContext = {
 	players: Player[]
 	minPlayers: number
 	maxPlayers: number
@@ -11,18 +11,10 @@ type LobbyContext = {
 	deck: Card[]
 }
 
-type LobbyEvents =
-	| {type: 'PLAYER_JOINED'; playerId: string; playerName: string}
-	| {type: 'PLAYER_DROPPED'; playerId: string}
-	| {type: 'PLAYER_READY'; playerId: string}
-	| {type: 'PLAYER_UNREADY'; playerId: string}
-	| {type: 'SEED'; seed: string}
-	| {type: 'START_GAME'}
-
 export const lobbyMachine = setup({
 	types: {
 		context: {} as LobbyContext,
-		events: {} as LobbyEvents,
+		events: {} as LobbyEvent,
 	},
 	actions: {
 		addPlayer: assign({

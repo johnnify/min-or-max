@@ -50,20 +50,18 @@ describe('playingMachine', () => {
 		}
 	}
 
-	it('should draw a card for the current player at turn start', () => {
+	it('should automatically draw a card for the current player and transition to playerTurn', () => {
 		const gameState = createGameState()
 		const actor = createActor(playingMachine, {
 			input: gameState,
 		})
+
+		const drawPileBefore = gameState.drawPile.length
+		const handBefore = gameState.players[0].hand.length
+
 		actor.start()
 
-		expect(actor.getSnapshot().value).toBe('turnStart')
-
-		const drawPileBefore = actor.getSnapshot().context.drawPile.length
-		const handBefore = actor.getSnapshot().context.players[0].hand.length
-
-		actor.send({type: 'TURN_STARTED'})
-
+		// Machine should automatically transition from turnStart to playerTurn
 		const context = actor.getSnapshot().context
 		expect(context.drawPile).toHaveLength(drawPileBefore - 1)
 		expect(context.players[0].hand).toHaveLength(handBefore + 1)
@@ -79,7 +77,6 @@ describe('playingMachine', () => {
 		})
 		actor.start()
 
-		actor.send({type: 'TURN_STARTED'})
 		expect(actor.getSnapshot().value).toMatchObject({
 			playerTurn: 'awaitingAction',
 		})
@@ -100,8 +97,6 @@ describe('playingMachine', () => {
 			input: gameState,
 		})
 		actor.start()
-
-		actor.send({type: 'TURN_STARTED'})
 
 		const handBefore = actor.getSnapshot().context.players[0].hand.length
 		const discardBefore = actor.getSnapshot().context.discardPile.length
@@ -138,7 +133,6 @@ describe('playingMachine', () => {
 
 		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
 
-		actor.send({type: 'TURN_STARTED'})
 		actor.send({type: 'CHOOSE_CARD', cardId: gameState.players[0].hand[0].id})
 		actor.send({type: 'PLAY_CARD'})
 
@@ -151,7 +145,10 @@ describe('playingMachine', () => {
 		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
 		expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(false)
 		expect(actor.getSnapshot().context.chosenCard).toBe(null)
-		expect(actor.getSnapshot().value).toBe('turnStart')
+		// Machine auto-transitions through turnStart to playerTurn
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'awaitingAction',
+		})
 	})
 
 	it('should handle complete multi-player game flow across multiple turns', () => {
@@ -165,7 +162,6 @@ describe('playingMachine', () => {
 		expect(actor.getSnapshot().context.players[0].name).toBe('Alice')
 		expect(actor.getSnapshot().context.players[1].name).toBe('Bob')
 
-		actor.send({type: 'TURN_STARTED'})
 		const aliceCardToPlay = actor.getSnapshot().context.players[0].hand[0]
 		actor.send({type: 'CHOOSE_CARD', cardId: aliceCardToPlay.id})
 		actor.send({type: 'PLAY_CARD'})
@@ -174,9 +170,6 @@ describe('playingMachine', () => {
 		actor.send({type: 'END_TURN'})
 
 		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
-		expect(actor.getSnapshot().value).toBe('turnStart')
-
-		actor.send({type: 'TURN_STARTED'})
 		expect(actor.getSnapshot().context.players[1].hand).toHaveLength(4)
 
 		const bobValidCard = actor
@@ -198,14 +191,14 @@ describe('playingMachine', () => {
 		actor.send({type: 'END_TURN'})
 
 		expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
-		expect(actor.getSnapshot().value).toBe('turnStart')
+		expect(actor.getSnapshot().value).toMatchObject({
+			playerTurn: 'awaitingAction',
+		})
 	})
 
 	it('should allow player to spin the wheel during their turn', () => {
 		const gameState = createGameState()
 		const actor = createActor(playingMachine, {input: gameState}).start()
-
-		actor.send({type: 'TURN_STARTED'})
 
 		const initialWheelAngle = actor.getSnapshot().context.wheelAngle
 		expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(false)
@@ -229,7 +222,6 @@ describe('playingMachine', () => {
 		]
 
 		const actor = createActor(playingMachine, {input: gameState}).start()
-		actor.send({type: 'TURN_STARTED'})
 
 		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-8'})
 
@@ -249,7 +241,6 @@ describe('playingMachine', () => {
 		]
 
 		const actor = createActor(playingMachine, {input: gameState}).start()
-		actor.send({type: 'TURN_STARTED'})
 
 		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-9'})
 
@@ -271,7 +262,6 @@ describe('playingMachine', () => {
 		]
 
 		const actor = createActor(playingMachine, {input: gameState}).start()
-		actor.send({type: 'TURN_STARTED'})
 
 		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-6'})
 
@@ -291,7 +281,6 @@ describe('playingMachine', () => {
 		]
 
 		const actor = createActor(playingMachine, {input: gameState}).start()
-		actor.send({type: 'TURN_STARTED'})
 
 		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-4'})
 
@@ -313,7 +302,6 @@ describe('playingMachine', () => {
 		]
 
 		const actor = createActor(playingMachine, {input: gameState}).start()
-		actor.send({type: 'TURN_STARTED'})
 
 		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-A'})
 
@@ -333,7 +321,6 @@ describe('playingMachine', () => {
 		]
 
 		const actor = createActor(playingMachine, {input: gameState}).start()
-		actor.send({type: 'TURN_STARTED'})
 
 		actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-2'})
 
@@ -358,11 +345,7 @@ describe('playingMachine', () => {
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
 
-			expect(actor.getSnapshot().context.drawPile).toHaveLength(0)
-			expect(actor.getSnapshot().context.discardPile).toHaveLength(4)
-
-			actor.send({type: 'TURN_STARTED'})
-
+			// After start, machine auto-transitions and reshuffles
 			const context = actor.getSnapshot().context
 			expect(context.drawPile).toHaveLength(2)
 			expect(context.discardPile).toHaveLength(1)
@@ -380,8 +363,6 @@ describe('playingMachine', () => {
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
 
-			actor.send({type: 'TURN_STARTED'})
-
 			const context = actor.getSnapshot().context
 			expect(context.drawPile).toHaveLength(0)
 			expect(context.discardPile).toHaveLength(2)
@@ -396,7 +377,6 @@ describe('playingMachine', () => {
 			gameState.hasSpunThisTurn = false
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: gameState.players[0].hand[0].id})
 			actor.send({type: 'PLAY_CARD'})
 
@@ -418,7 +398,9 @@ describe('playingMachine', () => {
 			})
 
 			actor.send({type: 'END_TURN'})
-			expect(actor.getSnapshot().value).toBe('turnStart')
+			expect(actor.getSnapshot().value).toMatchObject({
+				playerTurn: 'awaitingAction',
+			})
 		})
 
 		it('should not allow spinning wheel after playing card if already spun this turn', () => {
@@ -427,7 +409,6 @@ describe('playingMachine', () => {
 			gameState.hasSpunThisTurn = false
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 
 			actor.send({type: 'SPIN_WHEEL', force: 0.05})
 			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
@@ -478,7 +459,6 @@ describe('playingMachine', () => {
 			gameState.players[0].hand = [createCard('spades', '5')]
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-5'})
 			actor.send({type: 'PLAY_CARD'})
 
@@ -499,7 +479,6 @@ describe('playingMachine', () => {
 			gameState.players[0].hand = [createCard('spades', '5')]
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-5'})
 			actor.send({type: 'PLAY_CARD'})
 
@@ -522,7 +501,6 @@ describe('playingMachine', () => {
 			gameState.players[0].hand = [createCard('spades', '7')]
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-7'})
 			actor.send({type: 'PLAY_CARD'})
 
@@ -543,7 +521,6 @@ describe('playingMachine', () => {
 			gameState.players[0].hand = [createCard('spades', '7')]
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-7'})
 			actor.send({type: 'PLAY_CARD'})
 
@@ -594,7 +571,6 @@ describe('playingMachine', () => {
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
 
-			actor.send({type: 'TURN_STARTED'})
 			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
 			expect(actor.getSnapshot().context.players[0].hand).toHaveLength(4)
 
@@ -605,9 +581,10 @@ describe('playingMachine', () => {
 
 			actor.send({type: 'END_TURN'})
 			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
-			expect(actor.getSnapshot().value).toBe('turnStart')
+			expect(actor.getSnapshot().value).toMatchObject({
+				playerTurn: 'awaitingAction',
+			})
 
-			actor.send({type: 'TURN_STARTED'})
 			expect(actor.getSnapshot().context.players[1].hand).toHaveLength(4)
 
 			actor.send({type: 'CHOOSE_CARD', cardId: 'clubs-7'})
@@ -617,7 +594,6 @@ describe('playingMachine', () => {
 			actor.send({type: 'END_TURN'})
 			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
 
-			actor.send({type: 'TURN_STARTED'})
 			expect(actor.getSnapshot().context.players[0].hand).toHaveLength(4)
 
 			actor.send({type: 'CHOOSE_CARD', cardId: 'hearts-8'})
@@ -626,7 +602,6 @@ describe('playingMachine', () => {
 
 			actor.send({type: 'END_TURN'})
 
-			actor.send({type: 'TURN_STARTED'})
 			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
 
 			actor.send({type: 'SPIN_WHEEL', force: 0.05})
@@ -646,7 +621,6 @@ describe('playingMachine', () => {
 			const gameState = createGameState()
 			const actor = createActor(playingMachine, {input: gameState}).start()
 
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'SPIN_WHEEL', force: 0.5})
 
 			const snapshot1 = actor.getSnapshot()
@@ -694,7 +668,6 @@ describe('playingMachine', () => {
 			const gameState = createGameState()
 			const actor = createActor(playingMachine, {input: gameState}).start()
 
-			actor.send({type: 'TURN_STARTED'})
 			expect(actor.getSnapshot().value).toMatchObject({
 				playerTurn: 'awaitingAction',
 			})
@@ -734,7 +707,6 @@ describe('playingMachine', () => {
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
 
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'SURRENDER'})
 
 			expect(actor.getSnapshot().value).toBe('gameOver')
@@ -755,7 +727,6 @@ describe('playingMachine', () => {
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
 
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'SURRENDER'})
 
 			expect(actor.getSnapshot().value).toBe('gameOver')
@@ -774,7 +745,6 @@ describe('playingMachine', () => {
 			gameState.players[0].hand = [createCard('spades', 'A')]
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-A'})
 
 			expect(actor.getSnapshot().value).toMatchObject({
@@ -805,7 +775,6 @@ describe('playingMachine', () => {
 			gameState.players[0].hand = [createCard('spades', 'A')]
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-A'})
 			actor.send({
 				type: 'ADD_EFFECT',
@@ -839,7 +808,6 @@ describe('playingMachine', () => {
 			]
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-J'})
 
 			expect(actor.getSnapshot().value).toMatchObject({
@@ -880,7 +848,6 @@ describe('playingMachine', () => {
 			gameState.drawPile = [createCard('clubs', '2'), createCard('hearts', '3')]
 
 			const actor = createActor(playingMachine, {input: gameState}).start()
-			actor.send({type: 'TURN_STARTED'})
 			actor.send({type: 'CHOOSE_CARD', cardId: 'spades-J'})
 			actor.send({type: 'SEARCH_AND_DRAW', rank: 'Q'})
 

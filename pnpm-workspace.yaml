@@ -6,7 +6,8 @@ catalog:
   '@types/node': ^24.10.1
   typescript: ^5.9.3
   vitest: ^4.0.9
-  wrangler: ^4.48.0
+  # There is a bug in 4.48 so it's deprecated: keep checking for 4.49+
+  wrangler: 4.47.0
   xstate: ^5.24.0
 
 onlyBuiltDependencies:
