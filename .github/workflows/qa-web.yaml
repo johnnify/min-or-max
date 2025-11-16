@@ -20,12 +20,12 @@ jobs:
       - uses: jdx/mise-action@v3
       - name: Install dependencies
         run: pnpm install
+      - name: Copy committed test environment variables
+        run: cp .env.test .env
       - name: Type check with svelte-check
         run: pnpm check
       - name: Code quality check with oxlint
         run: pnpm lint
-      - name: Copy committed test environment variables
-        run: cp .env.test .env
       - name: Confirm the app builds
         run: pnpm build
   browser-tests:

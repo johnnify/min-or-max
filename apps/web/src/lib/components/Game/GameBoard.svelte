@@ -229,6 +229,8 @@
 			sendMessage({type: 'START_GAME'})
 		}}
 	/>
+{:else if gamePhase === 'gameOver'}
+	<div>Game over! TODO: Who won?!</div>
 {:else}
 	<div class="space-y-4">
 		<aside class="grid grid-cols-12 gap-4 font-mono text-sm">
@@ -274,14 +276,34 @@
 					}}
 				/>
 
-				{#if gameState.discardPile.length}
+				{#if topDiscardCard}
 					<div class="flex items-center gap-4">
 						<DiscardPile pile={gameState.discardPile} />
-						{#if mode === 'min'}
-							<MinIcon class="size-32" />
-						{:else}
-							<MaxIcon class="size-32" />
-						{/if}
+						<div class="flex flex-col items-center gap-4">
+							{#if mode === 'min'}
+								<MaxIcon class="size-32" />
+								{#if topDiscardCard.card.rank === 'A'}
+									<span
+										>play <strong>any card</strong> (ace counts as highest OR lowest)</span
+									>
+								{:else}
+									<span
+										>play <strong>{topDiscardCard.card.rank}</strong> or lower!</span
+									>
+								{/if}
+							{:else}
+								<MinIcon class="size-32" />
+								{#if topDiscardCard.card.rank === 'A'}
+									<span
+										>play <strong>any card</strong> (ace counts as highest OR lowest)</span
+									>
+								{:else}
+									<span
+										>play <strong>{topDiscardCard.card.rank}</strong> or higher!</span
+									>
+								{/if}
+							{/if}
+						</div>
 						<!-- TODO: Show your played card here -->
 						<div
 							class="border-border aspect-5/7 w-32 border-2 border-dotted"
