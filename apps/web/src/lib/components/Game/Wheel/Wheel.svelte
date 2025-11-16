@@ -1,4 +1,5 @@
 <script lang="ts">
+	import {getModeFromWheelAngle} from '@repo/state'
 	import MinIcon from '~icons/mdi/less-than'
 	import MaxIcon from '~icons/mdi/greater-than'
 	import {cn} from '$lib/utils'
@@ -12,11 +13,7 @@
 
 	let {angle, onclick, disabled}: Props = $props()
 
-	const deriveModeFromAngle = (angle: number) => {
-		const normalizedAngle = angle % 360
-		return normalizedAngle < 180 ? 'MIN' : 'MAX'
-	}
-	let mode = $derived(deriveModeFromAngle(angle))
+	let mode = $derived(getModeFromWheelAngle(angle))
 </script>
 
 <button
@@ -27,7 +24,7 @@
 		'bg-card border-border flex size-32 flex-col rounded-full border',
 	)}
 >
-	{#if mode === 'MIN'}
+	{#if mode === 'min'}
 		<MinIcon />
 
 		<span>Min</span>

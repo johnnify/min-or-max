@@ -56,12 +56,12 @@ test('multiplayer game lobby and start', async ({browser}) => {
 	// can see the top discard card
 	const discardPileRegion1 = page1.getByRole('list', {name: 'Discard Pile'})
 	await expect(
-		discardPileRegion1.getByRole('img', {name: '6 of Clubs'}),
+		discardPileRegion1.getByRole('img', {name: '6 of clubs'}),
 	).toBeVisible()
 
 	// Player 1 starts with 4 cards (3 + 1 already drawn for turn)
-	const player1HandRegion = page1.getByRole('list', {name: 'Hero hand'})
-	await expect(player1HandRegion.getByRole('listitem')).toHaveCount(4)
+	const heroHandRegion1 = page1.getByRole('list', {name: 'Hero hand'})
+	await expect(heroHandRegion1.getByRole('listitem')).toHaveCount(4)
 
 	// Player 2 starts with 3 cards
 	const villainHandRegion1 = page1.getByRole('list', {name: 'Villain 1 hand'})
@@ -70,6 +70,12 @@ test('multiplayer game lobby and start', async ({browser}) => {
 	await expect(
 		villainHandRegion1.getByRole('img', {name: 'The back of a card!'}),
 	).toHaveCount(3)
+
+	// Player 1 plays the 4 of spades (on min mode, beats the 6 of clubs)
+	await heroHandRegion1.getByRole('button', {name: '4 of spades'}).click()
+	await expect(
+		discardPileRegion1.getByRole('img', {name: '4 of spades'}),
+	).toBeVisible()
 
 	await context1.close()
 	await context2.close()

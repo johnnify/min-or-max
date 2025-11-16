@@ -38,7 +38,19 @@
 </script>
 
 {#if hidden}
-	<enhanced:img src="./cards/card-back.png" alt="The back of a card!" />
+	<enhanced:img
+		src="./cards/card-back.png"
+		alt="The back of a card!"
+		class="card"
+	/>
 {:else}
-	<enhanced:img {src} {alt} />
+	<enhanced:img {src} {alt} class="card" />
 {/if}
+
+<style>
+	.card {
+		--rotation: calc((var(--index)) * 5deg * (var(--index) % 2));
+		z-index: calc(100 - var(--index));
+		transform: rotate(var(--rotation));
+	}
+</style>

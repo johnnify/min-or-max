@@ -9,9 +9,11 @@
 		isStateSnapshot,
 		isGameEvent,
 		isMinOrMaxSnapshot,
+		canCardBeatTopCard,
 		type ClientMessage,
 		type MinOrMaxSnapshot,
 		type Player,
+		type Card,
 	} from '@repo/state'
 	import TickCircleIcon from '~icons/mdi/tick-circle-outline'
 
@@ -23,6 +25,7 @@
 	import {Spinner} from '$lib/components/ui/spinner'
 	import Lobby from './Lobby.svelte'
 	import GameCard from './GameCard/GameCard.svelte'
+	import DiscardPile from './DiscardPile.svelte'
 
 	type Props = {
 		roomId: string
@@ -137,7 +140,7 @@
 
 	let topDiscardCard = $derived(
 		gameState && gameState.discardPile.length > 0
-			? gameState.discardPile[gameState.discardPile.length - 1]
+			? gameState.discardPile[0]
 			: null,
 	)
 
@@ -154,6 +157,16 @@
 			{hero: null, villains: []},
 		) || {hero: null, villains: []},
 	)
+
+	const canPlayCard = (card: Card): boolean => {
+		if (!gameState) return false
+
+		return canCardBeatTopCard(
+			card,
+			topDiscardCard?.card || null,
+			gameState.wheelAngle,
+		)
+	}
 </script>
 
 <div class="mb-[5svh] flex justify-between gap-4">
@@ -224,13 +237,7 @@
 				/>
 
 				{#if gameState.discardPile.length}
-					<ul aria-label="Discard Pile">
-						{#each gameState.discardPile as { card } (card.id)}
-							<li>
-								<GameCard {card} />
-							</li>
-						{/each}
-					</ul>
+					<DiscardPile pile={gameState.discardPile} />
 				{/if}
 			</div>
 
@@ -242,7 +249,15 @@
 				<ul class="flex justify-center gap-2" aria-label="Hero hand">
 					{#each hero?.hand as card (card.id)}
 						<li>
-							<GameCard {card} />
+							<button
+								onclick={() => {
+									sendMessage({type: 'CHOOSE_CARD', cardId: card.id})
+									sendMessage({type: 'PLAY_CARD'})
+								}}
+								disabled={!canPlayCard(card)}
+							>
+								<GameCard {card} />
+							</button>
 						</li>
 					{/each}
 				</ul>

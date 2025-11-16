@@ -14,6 +14,8 @@ import {
 	getCardValue,
 	calculateCurrentPlayerWins,
 	calculatePreviousPlayerWins,
+	getModeFromWheelAngle,
+	canCardBeatTopCard,
 } from './utils'
 
 export type MinOrMaxContext = {
@@ -157,7 +159,7 @@ export const minOrMaxMachine = setup({
 			newDrawPile.shift()
 
 			const cardValue = getCardValue(card.rank)
-			const wheelMode = context.wheelAngle >= 180 ? 'min' : 'max'
+			const wheelMode = getModeFromWheelAngle(context.wheelAngle)
 			const playedValue = wheelMode === 'max' ? cardValue : -cardValue
 
 			const playedCard: PlayedCard = {
@@ -294,7 +296,7 @@ export const minOrMaxMachine = setup({
 				}
 			}
 
-			const wheelMode = context.wheelAngle >= 180 ? 'min' : 'max'
+			const wheelMode = getModeFromWheelAngle(context.wheelAngle)
 			const playedValue = wheelMode === 'max' ? cardValue : -cardValue
 
 			const playedCard: PlayedCard = {
@@ -387,22 +389,9 @@ export const minOrMaxMachine = setup({
 			)
 			if (!chosenCard) return false
 
-			const topPlayedCard = context.discardPile[0]
-			if (!topPlayedCard) return true
+			const topCard = context.discardPile[0]?.card || null
 
-			const topCard = topPlayedCard.card
-
-			if (chosenCard.rank === 'A' || topCard.rank === 'A') return true
-
-			const chosenValue = getCardValue(chosenCard.rank)
-			const topValue = getCardValue(topCard.rank)
-			const wheelMode = context.wheelAngle >= 180 ? 'min' : 'max'
-
-			if (wheelMode === 'max') {
-				return chosenValue >= topValue
-			} else {
-				return chosenValue <= topValue
-			}
+			return canCardBeatTopCard(chosenCard, topCard, context.wheelAngle)
 		},
 		chosenCardHasEffect: ({context}) => {
 			return context.chosenCard?.effect !== undefined

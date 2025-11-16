@@ -79,9 +79,9 @@ export class GameRoom implements DurableObject {
 				this.players.set(ws, playerInfo)
 				this.playerRegistry.set(data.playerId, playerInfo)
 				// Preserve seed from initial connection if present
-			const attachment = ws.deserializeAttachment() as {seed?: string} | null
-			const seed = attachment?.seed
-			ws.serializeAttachment({...playerInfo, ...(seed && {seed})})
+				const attachment = ws.deserializeAttachment() as {seed?: string} | null
+				const seed = attachment?.seed
+				ws.serializeAttachment({...playerInfo, ...(seed && {seed})})
 
 				if (!existingPlayer) {
 					this.ctx.storage.sql.exec(

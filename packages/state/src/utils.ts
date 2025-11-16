@@ -85,6 +85,31 @@ export const getCardValue = (rank: CardRank): number => {
 	return parseInt(rank, 10)
 }
 
+export const getModeFromWheelAngle = (wheelAngle: number): 'min' | 'max' => {
+	const normalizedAngle = ((wheelAngle % 360) + 360) % 360
+	return normalizedAngle >= 180 ? 'min' : 'max'
+}
+
+export const canCardBeatTopCard = (
+	chosenCard: Card,
+	topCard: Card | null,
+	wheelAngle: number,
+): boolean => {
+	if (!topCard) return true
+
+	if (chosenCard.rank === 'A' || topCard.rank === 'A') return true
+
+	const chosenValue = getCardValue(chosenCard.rank)
+	const topValue = getCardValue(topCard.rank)
+	const wheelMode = getModeFromWheelAngle(wheelAngle)
+
+	if (wheelMode === 'max') {
+		return chosenValue >= topValue
+	} else {
+		return chosenValue <= topValue
+	}
+}
+
 export const calculateSpin = (force: number, rng: Rng | null): number => {
 	if (!rng) return 0
 
