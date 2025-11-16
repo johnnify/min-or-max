@@ -292,7 +292,7 @@ export class GameRoom implements DurableObject {
 
 			const currentPlayer = context.players[context.currentPlayerIndex]
 
-			if (currentPlayer.id !== playerInfo.playerId) {
+			if (!currentPlayer || currentPlayer.id !== playerInfo.playerId) {
 				return
 			}
 

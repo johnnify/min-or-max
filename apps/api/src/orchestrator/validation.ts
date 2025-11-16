@@ -34,6 +34,10 @@ export const canPlayerSendEvent = (
 		const context = snapshot.context
 		const currentPlayer = context.players[context.currentPlayerIndex]
 
+		if (!currentPlayer) {
+			return {allowed: false, reason: 'Invalid game state: current player not found'}
+		}
+
 		if (currentPlayer.id !== playerId) {
 			return {allowed: false, reason: 'Not your turn'}
 		}
