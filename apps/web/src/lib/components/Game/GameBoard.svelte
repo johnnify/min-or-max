@@ -16,6 +16,7 @@
 		type Player,
 		type Card,
 	} from '@repo/state'
+	import {Rng} from '@repo/rng'
 	import TickCircleIcon from '~icons/mdi/tick-circle-outline'
 	import MinIcon from '~icons/mdi/less-than'
 	import MaxIcon from '~icons/mdi/greater-than'
@@ -26,8 +27,8 @@
 	import {Button} from '$lib/components/ui/button'
 	import Badge from '$lib/components/ui/badge/badge.svelte'
 	import {Spinner} from '$lib/components/ui/spinner'
+	import GameCard from '$lib/components/Game/GameCard/GameCard.svelte'
 	import Lobby from './Lobby.svelte'
-	import GameCard from './GameCard/GameCard.svelte'
 	import DiscardPile from './DiscardPile.svelte'
 
 	type Props = {
@@ -110,6 +111,9 @@
 					console.error('Invalid snapshot:', data.state)
 					return
 				}
+
+				// Reconstitute the Rng instance from serialized JSON data
+				data.state.context.rng = Rng.fromJSON(data.state.context.rng)
 
 				minOrMaxActor.stop()
 				minOrMaxActor = createActor(minOrMaxMachine, {
