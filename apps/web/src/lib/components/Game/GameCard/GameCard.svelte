@@ -18,8 +18,9 @@
 
 	type Props = {
 		card: Card
+		hidden?: boolean
 	}
-	let {card}: Props = $props()
+	let {card, hidden = false}: Props = $props()
 
 	const src = $derived.by(() => {
 		const imagePath = `./cards/${card.id}.png`
@@ -36,4 +37,8 @@
 	const alt = $derived(`${card.rank} of ${card.suit}`)
 </script>
 
-<enhanced:img {src} {alt} />
+{#if hidden}
+	<enhanced:img src="./cards/card-back.png" alt="The back of a card!" />
+{:else}
+	<enhanced:img {src} {alt} />
+{/if}

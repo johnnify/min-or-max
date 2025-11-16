@@ -78,7 +78,10 @@ export class GameRoom implements DurableObject {
 
 				this.players.set(ws, playerInfo)
 				this.playerRegistry.set(data.playerId, playerInfo)
-				ws.serializeAttachment({...playerInfo})
+				// Preserve seed from initial connection if present
+			const attachment = ws.deserializeAttachment() as {seed?: string} | null
+			const seed = attachment?.seed
+			ws.serializeAttachment({...playerInfo, ...(seed && {seed})})
 
 				if (!existingPlayer) {
 					this.ctx.storage.sql.exec(
@@ -100,6 +103,16 @@ export class GameRoom implements DurableObject {
 							}
 							this.broadcastEvent(joinEvent)
 							this.currentActor.send(joinEvent)
+
+							// Send seed if present
+							if (seed) {
+								const seedEvent: GameEvent = {
+									type: 'SEED',
+									seed,
+								}
+								this.broadcastEvent(seedEvent)
+								this.currentActor.send(seedEvent)
+							}
 						}
 					}
 				}
@@ -133,25 +146,6 @@ export class GameRoom implements DurableObject {
 					} satisfies ServerMessage),
 				)
 				return
-			}
-
-			if (data.type === 'READY' && this.currentActor) {
-				const currentPhase = getPhaseFromState(
-					this.currentActor.getSnapshot().value,
-				)
-				if (currentPhase === 'lobby') {
-					const attachment = ws.deserializeAttachment() as {
-						seed?: string
-					} | null
-					if (attachment?.seed) {
-						const seedEvent: GameEvent = {
-							type: 'SEED',
-							seed: attachment.seed,
-						}
-						this.broadcastEvent(seedEvent)
-						this.currentActor.send(seedEvent)
-					}
-				}
 			}
 
 			await this.handleEvent(data, playerInfo)

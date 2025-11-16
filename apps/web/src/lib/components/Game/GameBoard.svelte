@@ -11,6 +11,7 @@
 		isMinOrMaxSnapshot,
 		type ClientMessage,
 		type MinOrMaxSnapshot,
+		type Player,
 	} from '@repo/state'
 	import TickCircleIcon from '~icons/mdi/tick-circle-outline'
 
@@ -21,6 +22,7 @@
 	import Badge from '$lib/components/ui/badge/badge.svelte'
 	import {Spinner} from '$lib/components/ui/spinner'
 	import Lobby from './Lobby.svelte'
+	import GameCard from './GameCard/GameCard.svelte'
 
 	type Props = {
 		roomId: string
@@ -66,13 +68,13 @@
 		})
 
 		const wsBaseUrl = PUBLIC_API_URL.replace(/^http/, 'ws')
-		const wsUrl = new URL('/api/room/', wsBaseUrl)
+		const wsUrl = new URL(`/api/room/${roomId}`, wsBaseUrl)
 
 		if (seed) {
 			wsUrl.searchParams.set('seed', seed)
 		}
 
-		const ws = new WebSocket(`${wsUrl}/api/room/${roomId}`)
+		const ws = new WebSocket(wsUrl)
 		roomIdsToWs.set(roomId, ws)
 
 		ws.onopen = () => {
@@ -132,6 +134,26 @@
 		actorSnapshot ? getPhaseFromState(actorSnapshot.value) : 'lobby',
 	)
 	let gameState = $derived(actorSnapshot?.context)
+
+	let topDiscardCard = $derived(
+		gameState && gameState.discardPile.length > 0
+			? gameState.discardPile[gameState.discardPile.length - 1]
+			: null,
+	)
+
+	let {hero, villains} = $derived(
+		gameState?.players?.reduce<{hero: Player | null; villains: Player[]}>(
+			(acc, p) => {
+				if (p.id === player.id) {
+					acc.hero = p
+				} else {
+					acc.villains.push(p)
+				}
+				return acc
+			},
+			{hero: null, villains: []},
+		) || {hero: null, villains: []},
+	)
 </script>
 
 <div class="mb-[5svh] flex justify-between gap-4">
@@ -175,23 +197,55 @@
 		</aside>
 
 		<section class="grid gap-8 py-8">
-			<div class="flex flex-col items-center">
-				<!-- TODO: Actual angle -->
-				<!-- TODO: Spin on click -->
-				<!-- TODO: Only enabled if I can spin -->
-				<Wheel angle={90} onclick={() => {}} disabled={false} />
+			<ol>
+				{#each villains as { id, hand }, index (id)}
+					<li>
+						<ul
+							class="flex justify-center gap-2"
+							aria-label="Villain {index + 1} hand"
+						>
+							{#each hand as card (card.id)}
+								<li>
+									<GameCard {card} hidden />
+								</li>
+							{/each}
+						</ul>
+					</li>
+				{/each}
+			</ol>
 
-				<div>
-					<!-- TODO: Show top discard card-->
-				</div>
+			<div class="flex flex-col items-center">
+				<!-- TODO: Only enabled if I can spin -->
+				<!-- TODO: Spin on click -->
+				<Wheel
+					angle={gameState.wheelAngle}
+					disabled={false}
+					onclick={() => {}}
+				/>
+
+				{#if gameState.discardPile.length}
+					<ul aria-label="Discard Pile">
+						{#each gameState.discardPile as { card } (card.id)}
+							<li>
+								<GameCard {card} />
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</div>
 
 			<div class="text-center">
 				<p class="mb-2 text-sm">
-					{player.name} (You!)
+					{player.name} (you!)
 					<!-- TODO: UI to make it obvious it's our turn -->
 				</p>
-				<div class="flex justify-center gap-2">TODO: My hand</div>
+				<ul class="flex justify-center gap-2" aria-label="Hero hand">
+					{#each hero?.hand as card (card.id)}
+						<li>
+							<GameCard {card} />
+						</li>
+					{/each}
+				</ul>
 				<Button
 					onclick={() => {
 						// TODO: End turn

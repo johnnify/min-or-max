@@ -30,10 +30,10 @@
 	{#if mode === 'MIN'}
 		<MinIcon />
 
-		<span> Min </span>
+		<span>Min</span>
 	{:else}
 		<MaxIcon />
 
-		<span> Max </span>
+		<span>Max</span>
 	{/if}
 </button>

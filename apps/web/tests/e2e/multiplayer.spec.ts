@@ -5,7 +5,7 @@ test('multiplayer game lobby and start', async ({browser}) => {
 
 	const context1 = await browser.newContext()
 	const page1 = await context1.newPage()
-	await page1.goto(`/play/${roomId}`)
+	await page1.goto(`/play/${roomId}?seed=e2e`)
 	await expect(page1.getByTestId('hydrated')).toBeVisible()
 
 	await expect(
@@ -52,6 +52,24 @@ test('multiplayer game lobby and start', async ({browser}) => {
 
 	await expect(page1.getByText('Tally')).toBeVisible()
 	await expect(page2.getByText('Tally')).toBeVisible()
+
+	// can see the top discard card
+	const discardPileRegion1 = page1.getByRole('list', {name: 'Discard Pile'})
+	await expect(
+		discardPileRegion1.getByRole('img', {name: '6 of Clubs'}),
+	).toBeVisible()
+
+	// Player 1 starts with 4 cards (3 + 1 already drawn for turn)
+	const player1HandRegion = page1.getByRole('list', {name: 'Hero hand'})
+	await expect(player1HandRegion.getByRole('listitem')).toHaveCount(4)
+
+	// Player 2 starts with 3 cards
+	const villainHandRegion1 = page1.getByRole('list', {name: 'Villain 1 hand'})
+	await expect(villainHandRegion1.getByRole('listitem')).toHaveCount(3)
+	// Player 1 cannot see the Villain's cards!
+	await expect(
+		villainHandRegion1.getByRole('img', {name: 'The back of a card!'}),
+	).toHaveCount(3)
 
 	await context1.close()
 	await context2.close()
