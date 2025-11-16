@@ -1,10 +1,17 @@
 <script lang="ts">
+	import Lead from '$lib/components/typography/Lead.svelte'
 	import PageTitle from '$lib/components/typography/PageTitle.svelte'
 	import Paragraph from '$lib/components/typography/Paragraph.svelte'
+	import RoomCodeForm from './RoomCodeForm.svelte'
 </script>
 
-<main class="container grow">
-	<PageTitle class="mb-6 lg:mb-12 lg:text-6xl">Play</PageTitle>
+<main class="container grid gap-8">
+	<PageTitle>Play</PageTitle>
 
-	<Paragraph>Coming soon!</Paragraph>
+	<Lead>
+		Play with new friends across the internet, or use a code to join a specific
+		lobby!
+	</Lead>
+
+	<RoomCodeForm />
 </main>

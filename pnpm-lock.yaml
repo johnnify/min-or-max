@@ -16,7 +16,7 @@ catalogs:
       specifier: ^4.0.9
       version: 4.0.9
     wrangler:
-      specifier: 4.47.0
+      specifier: ^4.47.0
       version: 4.47.0
     xstate:
       specifier: ^5.24.0
