@@ -1,9 +1,6 @@
 <script lang="ts">
 	import {getModeFromWheelAngle} from '@repo/state'
-	import MinIcon from '~icons/mdi/less-than'
-	import MaxIcon from '~icons/mdi/greater-than'
-	import {cn} from '$lib/utils'
-	import {buttonVariants} from '$lib/components/ui/button'
+	import Button from '$lib/components/ui/button/button.svelte'
 
 	type Props = {
 		angle: number
@@ -16,22 +13,14 @@
 	let mode = $derived(getModeFromWheelAngle(angle))
 </script>
 
-<button
-	{onclick}
-	{disabled}
-	class={cn(
-		buttonVariants.base,
-		'bg-card border-border flex size-32 flex-col rounded-full border',
-	)}
-	aria-label="spin the wheel"
->
-	{#if mode === 'min'}
-		<MinIcon />
+<div class="mb-4 flex flex-col items-center gap-4">
+	<h3 class="uppercase">Mode {mode}</h3>
 
-		<span>Min</span>
-	{:else}
-		<MaxIcon />
-
-		<span>Max</span>
-	{/if}
-</button>
+	<!-- TODO: Cool spin thingy -->
+	<Button
+		{onclick}
+		{disabled}
+		variant="outline"
+		class="py-8 font-mono text-2xl uppercase">Spin!</Button
+	>
+</div>

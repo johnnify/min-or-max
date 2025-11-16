@@ -45,4 +45,4 @@
 	// TODO: Random slight rotation & transform per card would be neat!
 </script>
 
-<enhanced:img {src} {alt} class="aspect-5/7 size-32" />
+<enhanced:img {src} {alt} class="aspect-5/7 w-32" />

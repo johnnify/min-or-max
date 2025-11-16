@@ -79,8 +79,21 @@ test('multiplayer game lobby and start', async ({browser}) => {
 		discardPileRegion1.getByRole('img', {name: '8 of spades'}),
 	).toBeVisible()
 
-	// Ideally we'd want a seed that gives us a different mode after spinning!
-	await page1.getByRole('button', {name: 'spin the wheel'}).click()
+	// We should change to mode max after spinning!
+	await expect(
+		page1.getByRole('heading', {level: 3, name: 'mode min'}),
+	).toBeVisible()
+	await page1.getByRole('button', {name: 'spin'}).click()
+	await expect(
+		page1.getByRole('heading', {level: 3, name: 'mode max'}),
+	).toBeVisible()
+
+	// End turn, villain draws a card!
+	await page1.getByRole('button', {name: 'End Turn'}).click()
+	await expect(
+		villainHandRegion1.getByRole('img', {name: 'The back of a card'}),
+	).toHaveCount(4)
+	await expect(page1.getByRole('button', {name: 'End Turn'})).toBeDisabled()
 
 	await context1.close()
 	await context2.close()

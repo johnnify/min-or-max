@@ -10,12 +10,15 @@
 		isGameEvent,
 		isMinOrMaxSnapshot,
 		canCardBeatTopCard,
+		getModeFromWheelAngle,
 		type ClientMessage,
 		type MinOrMaxSnapshot,
 		type Player,
 		type Card,
 	} from '@repo/state'
 	import TickCircleIcon from '~icons/mdi/tick-circle-outline'
+	import MinIcon from '~icons/mdi/less-than'
+	import MaxIcon from '~icons/mdi/greater-than'
 
 	import {browser} from '$app/environment'
 	import {PUBLIC_API_URL} from '$env/static/public'
@@ -179,6 +182,28 @@
 			isCurrentPlayer &&
 			gameState?.hasSpunThisTurn === false,
 	)
+
+	let canEndTurn = $derived.by(() => {
+		if (!isCurrentPlayer || gamePhase !== 'playing') return false
+		if (!actorSnapshot) return false
+
+		const stateValue = actorSnapshot.value
+		if (typeof stateValue === 'object' && 'playing' in stateValue) {
+			const playingState = stateValue.playing
+			if (
+				typeof playingState === 'object' &&
+				'playerTurn' in playingState &&
+				playingState.playerTurn === 'postCardPlay'
+			) {
+				return true
+			}
+		}
+		return false
+	})
+
+	let mode = $derived(
+		gameState?.wheelAngle ? getModeFromWheelAngle(gameState.wheelAngle) : 'min',
+	)
 </script>
 
 <div class="mb-[5svh] flex justify-between gap-4">
@@ -250,7 +275,18 @@
 				/>
 
 				{#if gameState.discardPile.length}
-					<DiscardPile pile={gameState.discardPile} />
+					<div class="flex items-center gap-4">
+						<DiscardPile pile={gameState.discardPile} />
+						{#if mode === 'min'}
+							<MinIcon class="size-32" />
+						{:else}
+							<MaxIcon class="size-32" />
+						{/if}
+						<!-- TODO: Show your played card here -->
+						<div
+							class="border-border aspect-5/7 w-32 border-2 border-dotted"
+						></div>
+					</div>
 				{/if}
 			</div>
 
@@ -276,10 +312,9 @@
 				</ul>
 				<Button
 					onclick={() => {
-						// TODO: End turn
-						// TODO: Only enabled if I actually can end my turn
+						sendMessage({type: 'END_TURN'})
 					}}
-					disabled={false}
+					disabled={!canEndTurn}
 				>
 					End Turn
 				</Button>
