@@ -1,6 +1,5 @@
 import {describe, it, expect} from 'vitest'
 import worker from './index'
-import type {Env} from './types'
 
 const mockEnv = {
 	ALLOWED_ORIGINS: 'http://localhost:5173,https://example.com',

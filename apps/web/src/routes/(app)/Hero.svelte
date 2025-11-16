@@ -24,14 +24,6 @@
 				A <strong>multiplayer card game</strong> where you lay low or play it to
 				the max!
 			</p>
-			<p>
-				Perfect for game nights with friends and family. Easy to learn, exciting
-				to master.
-			</p>
-			<p>
-				Perfect for game nights with friends and family. Easy to learn, exciting
-				to master.
-			</p>
 		</div>
 		<div class="grid gap-4">
 			<Button href="/play" size="lg">

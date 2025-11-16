@@ -1,44 +1,33 @@
 import {describe, it, expect} from 'vitest'
 import {createActor, type Actor} from 'xstate'
-import {playingMachine, lobbyMachine} from '@repo/state'
-import type {Player} from '@repo/state'
-import {createCard, createPlayedCard} from '@repo/state'
-import {Rng} from '@repo/rng'
+import {minOrMaxMachine} from '@repo/state'
 import {canPlayerSendEvent} from './validation'
 
 describe('canPlayerSendEvent', () => {
-	const createPlayingActor = (): Actor<typeof playingMachine> => {
-		const rng = new Rng('test-seed')
-		const players: Player[] = [
-			{
-				id: 'player-1',
-				name: 'Alice',
-				isReady: true,
-				hand: [createCard('hearts', '5'), createCard('hearts', '7')],
-			},
-			{
-				id: 'player-2',
-				name: 'Bob',
-				isReady: true,
-				hand: [createCard('diamonds', '4'), createCard('diamonds', '6')],
-			},
-		]
-
-		const actor = createActor(playingMachine, {
-			input: {
-				rng,
-				players,
-				drawPile: [createCard('clubs', '2'), createCard('clubs', '3')],
-				discardPile: [createPlayedCard(createCard('spades', '3'), 3)],
-				minThreshold: -15,
-				maxThreshold: 40,
-				wheelAngle: 90,
-				currentScore: 3,
-				currentPlayerIndex: 0,
-				hasSpunThisTurn: false,
-			},
-		})
+	const createPlayingActor = (): Actor<typeof minOrMaxMachine> => {
+		const actor = createActor(minOrMaxMachine)
 		actor.start()
+
+		// Transition through lobby phase
+		actor.send({
+			type: 'PLAYER_JOINED',
+			playerId: 'player-1',
+			playerName: 'Alice',
+		})
+		actor.send({type: 'PLAYER_JOINED', playerId: 'player-2', playerName: 'Bob'})
+		actor.send({type: 'PLAYER_READY', playerId: 'player-1'})
+		actor.send({type: 'PLAYER_READY', playerId: 'player-2'})
+		actor.send({type: 'SEED', seed: 'test-seed'})
+		actor.send({type: 'START_GAME'})
+
+		// Transition through setup phase (automated events)
+		actor.send({type: 'PILE_SHUFFLED'})
+		actor.send({type: 'CARDS_DEALT'})
+		actor.send({type: 'THRESHOLDS_SET'})
+		actor.send({type: 'WHEEL_SPUN', force: 0.5})
+		actor.send({type: 'FIRST_CARD_PLAYED'})
+
+		// Now in playing phase
 		return actor
 	}
 
@@ -46,10 +35,14 @@ describe('canPlayerSendEvent', () => {
 		const actor = createPlayingActor()
 		const snapshot = actor.getSnapshot()
 
+		const currentPlayer =
+			snapshot.context.players[snapshot.context.currentPlayerIndex]
+		const cardId = currentPlayer.hand[0].id
+
 		const result = canPlayerSendEvent(
 			snapshot,
-			{type: 'CHOOSE_CARD', cardId: 'hearts-5'},
-			'player-1',
+			{type: 'CHOOSE_CARD', cardId},
+			currentPlayer.id,
 		)
 
 		expect(result.allowed).toBe(true)
@@ -60,10 +53,15 @@ describe('canPlayerSendEvent', () => {
 		const actor = createPlayingActor()
 		const snapshot = actor.getSnapshot()
 
+		const currentPlayerIndex = snapshot.context.currentPlayerIndex
+		const nonCurrentPlayerIndex = currentPlayerIndex === 0 ? 1 : 0
+		const nonCurrentPlayer = snapshot.context.players[nonCurrentPlayerIndex]
+		const cardId = nonCurrentPlayer.hand[0].id
+
 		const result = canPlayerSendEvent(
 			snapshot,
-			{type: 'CHOOSE_CARD', cardId: 'diamonds-4'},
-			'player-2',
+			{type: 'CHOOSE_CARD', cardId},
+			nonCurrentPlayer.id,
 		)
 
 		expect(result.allowed).toBe(false)
@@ -71,7 +69,7 @@ describe('canPlayerSendEvent', () => {
 	})
 
 	it('should allow any player to join during lobby phase', () => {
-		const actor = createActor(lobbyMachine)
+		const actor = createActor(minOrMaxMachine)
 		actor.start()
 		const snapshot = actor.getSnapshot()
 
@@ -88,30 +86,40 @@ describe('canPlayerSendEvent', () => {
 		const actor = createPlayingActor()
 		const snapshot = actor.getSnapshot()
 
+		const currentPlayer =
+			snapshot.context.players[snapshot.context.currentPlayerIndex]
+		const otherPlayerIndex = snapshot.context.currentPlayerIndex === 0 ? 1 : 0
+		const otherPlayer = snapshot.context.players[otherPlayerIndex]
+
 		const resultCurrentPlayer = canPlayerSendEvent(
 			snapshot,
 			{type: 'SURRENDER'},
-			'player-1',
+			currentPlayer.id,
 		)
 		expect(resultCurrentPlayer.allowed).toBe(true)
 
 		const resultOtherPlayer = canPlayerSendEvent(
 			snapshot,
 			{type: 'SURRENDER'},
-			'player-2',
+			otherPlayer.id,
 		)
 		expect(resultOtherPlayer.allowed).toBe(true)
 	})
 
 	it('should prevent player from spinning wheel during their turn if already spun', () => {
 		const actor = createPlayingActor()
+		const currentPlayer =
+			actor.getSnapshot().context.players[
+				actor.getSnapshot().context.currentPlayerIndex
+			]
+
 		actor.send({type: 'SPIN_WHEEL', force: 0.5})
 		const snapshot = actor.getSnapshot()
 
 		const result = canPlayerSendEvent(
 			snapshot,
 			{type: 'SPIN_WHEEL', force: 0.5},
-			'player-1',
+			currentPlayer.id,
 		)
 
 		expect(result.allowed).toBe(false)
@@ -124,10 +132,13 @@ describe('canPlayerSendEvent', () => {
 
 		expect(snapshot.context.hasSpunThisTurn).toBe(false)
 
+		const currentPlayer =
+			snapshot.context.players[snapshot.context.currentPlayerIndex]
+
 		const result = canPlayerSendEvent(
 			snapshot,
 			{type: 'SPIN_WHEEL', force: 0.5},
-			'player-1',
+			currentPlayer.id,
 		)
 
 		expect(result.allowed).toBe(true)
@@ -138,7 +149,15 @@ describe('canPlayerSendEvent', () => {
 		const actor = createPlayingActor()
 		const snapshot = actor.getSnapshot()
 
-		const result = canPlayerSendEvent(snapshot, {type: 'PLAY_CARD'}, 'player-2')
+		const currentPlayerIndex = snapshot.context.currentPlayerIndex
+		const nonCurrentPlayerIndex = currentPlayerIndex === 0 ? 1 : 0
+		const nonCurrentPlayer = snapshot.context.players[nonCurrentPlayerIndex]
+
+		const result = canPlayerSendEvent(
+			snapshot,
+			{type: 'PLAY_CARD'},
+			nonCurrentPlayer.id,
+		)
 
 		expect(result.allowed).toBe(false)
 		expect(result.reason).toBe('Not your turn')
@@ -148,7 +167,15 @@ describe('canPlayerSendEvent', () => {
 		const actor = createPlayingActor()
 		const snapshot = actor.getSnapshot()
 
-		const result = canPlayerSendEvent(snapshot, {type: 'END_TURN'}, 'player-2')
+		const currentPlayerIndex = snapshot.context.currentPlayerIndex
+		const nonCurrentPlayerIndex = currentPlayerIndex === 0 ? 1 : 0
+		const nonCurrentPlayer = snapshot.context.players[nonCurrentPlayerIndex]
+
+		const result = canPlayerSendEvent(
+			snapshot,
+			{type: 'END_TURN'},
+			nonCurrentPlayer.id,
+		)
 
 		expect(result.allowed).toBe(false)
 		expect(result.reason).toBe('Not your turn')

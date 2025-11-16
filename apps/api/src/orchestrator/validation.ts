@@ -1,5 +1,5 @@
 import type {Snapshot} from 'xstate'
-import type {GameEvent, PlayingContext} from '@repo/state'
+import type {GameEvent, MinOrMaxContext} from '@repo/state'
 
 type ValidationResult = {
 	allowed: boolean
@@ -36,7 +36,7 @@ export const canPlayerSendEvent = (
 			return {allowed: false, reason: 'No context available'}
 		}
 
-		const context = snapshot.context as PlayingContext
+		const context = snapshot.context as MinOrMaxContext
 		const currentPlayer = context.players[context.currentPlayerIndex]
 
 		if (currentPlayer.id !== playerId) {

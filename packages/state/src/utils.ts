@@ -6,7 +6,9 @@ import type {
 	CardEffect,
 	PlayedCard,
 	Player,
+	GamePhase,
 } from './types'
+import type {MinOrMaxSnapshot} from './minOrMax'
 
 export const CARD_SUITS: readonly CardSuit[] = [
 	'hearts',
@@ -115,4 +117,16 @@ export const calculatePreviousPlayerWins = (
 	const winner = players[previousPlayerIndex]
 	const losers = players.filter((p) => p.id !== winner.id)
 	return {winner, losers}
+}
+
+export const getPhaseFromState = (
+	stateValue: MinOrMaxSnapshot['value'],
+): GamePhase => {
+	if (stateValue === 'lobby') return 'lobby'
+	if (stateValue === 'gameOver') return 'gameOver'
+	if (typeof stateValue === 'object' && stateValue !== null) {
+		if ('setup' in stateValue) return 'setup'
+		if ('playing' in stateValue) return 'playing'
+	}
+	return 'lobby'
 }

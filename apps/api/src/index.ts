@@ -1,4 +1,3 @@
-import type {Env} from './types'
 export {GameRoom} from './GameRoom'
 
 export default {

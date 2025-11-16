@@ -1,22 +1,23 @@
-import {createActor, type AnyActorRef} from 'xstate'
-import type {GamePhase, GameEvent} from '@repo/state'
-import {lobbyMachine, setupMachine, playingMachine} from '@repo/state'
+import {createActor} from 'xstate'
 import type {
+	GameEvent,
+	MinOrMaxActor,
+	MinOrMaxSnapshot,
 	ClientMessage,
 	ServerMessage,
-	PlayerInfo,
-	StoredEvent,
-} from './types'
+} from '@repo/state'
+import {getPhaseFromState, minOrMaxMachine} from '@repo/state'
+import type {PlayerInfo, StoredEvent} from './types'
 import {canPlayerSendEvent} from './orchestrator/validation'
-import {getNextPhase, createTransitionInput} from './orchestrator/transitions'
 
 // TODO: Hard to test without Vitest v4 support:
 // https://github.com/cloudflare/workers-sdk/issues/11064
 export class GameRoom implements DurableObject {
-	private currentPhase: GamePhase = 'lobby'
-	private currentActor: AnyActorRef | null = null
+	private currentActor: MinOrMaxActor | null = null
 	private players: Map<WebSocket, PlayerInfo> = new Map()
 	private playerRegistry: Map<string, PlayerInfo> = new Map()
+	private eventCounter = 0
+	private lastPlayerIndex = -1
 
 	constructor(private ctx: DurableObjectState) {
 		void this.ctx.blockConcurrencyWhile(async () => {
@@ -33,7 +34,14 @@ export class GameRoom implements DurableObject {
 
 		const {0: client, 1: server} = new WebSocketPair()
 
+		const url = new URL(request.url)
+		const seed = url.searchParams.get('seed')
+
 		this.ctx.acceptWebSocket(server)
+
+		if (seed) {
+			server.serializeAttachment({seed})
+		}
 
 		return new Response(null, {
 			status: 101,
@@ -80,19 +88,20 @@ export class GameRoom implements DurableObject {
 						playerInfo.joinedAt,
 					)
 
-					if (this.currentActor && this.currentPhase === 'lobby') {
-						this.currentActor.send({
-							type: 'PLAYER_JOINED',
-							playerId: playerInfo.playerId,
-							playerName: playerInfo.playerName,
-						} as GameEvent)
+					if (this.currentActor) {
+						const currentPhase = getPhaseFromState(
+							this.currentActor.getSnapshot().value,
+						)
+						if (currentPhase === 'lobby') {
+							const joinEvent: GameEvent = {
+								type: 'PLAYER_JOINED',
+								playerId: playerInfo.playerId,
+								playerName: playerInfo.playerName,
+							}
+							this.broadcastEvent(joinEvent)
+							this.currentActor.send(joinEvent)
+						}
 					}
-
-					this.broadcast({
-						type: 'PLAYER_JOINED',
-						playerId: playerInfo.playerId,
-						playerName: playerInfo.playerName,
-					})
 				}
 
 				ws.send(
@@ -106,9 +115,9 @@ export class GameRoom implements DurableObject {
 					const snapshot = this.currentActor.getSnapshot()
 					ws.send(
 						JSON.stringify({
-							type: 'STATE_UPDATE',
-							phase: this.currentPhase,
+							type: 'STATE_SNAPSHOT',
 							state: snapshot,
+							sequenceId: this.eventCounter,
 						} satisfies ServerMessage),
 					)
 				}
@@ -124,6 +133,25 @@ export class GameRoom implements DurableObject {
 					} satisfies ServerMessage),
 				)
 				return
+			}
+
+			if (data.type === 'READY' && this.currentActor) {
+				const currentPhase = getPhaseFromState(
+					this.currentActor.getSnapshot().value,
+				)
+				if (currentPhase === 'lobby') {
+					const attachment = ws.deserializeAttachment() as {
+						seed?: string
+					} | null
+					if (attachment?.seed) {
+						const seedEvent: GameEvent = {
+							type: 'SEED',
+							seed: attachment.seed,
+						}
+						this.broadcastEvent(seedEvent)
+						this.currentActor.send(seedEvent)
+					}
+				}
 			}
 
 			await this.handleEvent(data, playerInfo)
@@ -162,7 +190,7 @@ export class GameRoom implements DurableObject {
 		}
 	}
 
-	async webSocketError(ws: WebSocket, error: unknown) {
+	async webSocketError(_ws: WebSocket, error: unknown) {
 		console.error('WebSocket error:', error)
 	}
 
@@ -195,18 +223,6 @@ export class GameRoom implements DurableObject {
 	}
 
 	private async restoreState() {
-		const phaseResults = this.ctx.storage.sql
-			.exec<{
-				value: string
-			}>(`SELECT value FROM game_state WHERE key = 'phase'`)
-			.toArray()
-
-		const snapshotResults = this.ctx.storage.sql
-			.exec<{
-				value: string
-			}>(`SELECT value FROM game_state WHERE key = 'snapshot'`)
-			.toArray()
-
 		const playersResults = this.ctx.storage.sql
 			.exec<{
 				player_id: string
@@ -224,44 +240,38 @@ export class GameRoom implements DurableObject {
 			})
 		}
 
-		if (phaseResults.length === 0) {
-			this.currentPhase = 'lobby'
-			this.currentActor = createActor(lobbyMachine)
-			this.subscribeToStateChanges()
-			this.currentActor.start()
-
-			await this.saveState()
-		} else {
-			this.currentPhase = phaseResults[0].value as GamePhase
-			const snapshot =
-				snapshotResults.length > 0 ? JSON.parse(snapshotResults[0].value) : null
-
-			if (this.currentPhase === 'lobby') {
-				this.currentActor = createActor(lobbyMachine)
-			} else if (this.currentPhase === 'setup') {
-				this.currentActor = createActor(setupMachine, {input: snapshot})
-			} else if (this.currentPhase === 'playing') {
-				this.currentActor = createActor(playingMachine, {input: snapshot})
-			}
-
-			this.subscribeToStateChanges()
-			this.currentActor?.start()
-		}
-	}
-
-	private subscribeToStateChanges() {
-		if (!this.currentActor) return
-
+		this.currentActor = createActor(minOrMaxMachine)
 		this.currentActor.subscribe((state) => {
 			this.onStateChange(state)
 		})
+		this.currentActor.start()
+
+		await this.saveState()
 	}
 
-	private onStateChange(state: unknown) {
+	private onStateChange(snapshot: MinOrMaxSnapshot) {
+		if (!this.currentActor) return
+
+		// Check for turn change to broadcast snapshot
+		const context = snapshot.context
+		const newPlayerIndex = context.currentPlayerIndex ?? -1
+
+		if (this.lastPlayerIndex !== newPlayerIndex && newPlayerIndex >= 0) {
+			// Turn changed! Broadcast snapshot
+			this.broadcast({
+				type: 'STATE_SNAPSHOT',
+				state: snapshot,
+				sequenceId: this.eventCounter,
+			})
+			this.lastPlayerIndex = newPlayerIndex
+		}
+	}
+
+	private broadcastEvent(event: GameEvent) {
 		this.broadcast({
-			type: 'STATE_UPDATE',
-			phase: this.currentPhase,
-			state,
+			type: 'GAME_EVENT',
+			event,
+			sequenceId: this.eventCounter++,
 		})
 	}
 
@@ -347,8 +357,7 @@ export class GameRoom implements DurableObject {
 		const snapshot = this.currentActor.getSnapshot()
 		const validation = canPlayerSendEvent(
 			snapshot,
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			gameEvent as any,
+			gameEvent,
 			playerInfo.playerId,
 		)
 
@@ -362,6 +371,8 @@ export class GameRoom implements DurableObject {
 			return
 		}
 
+		// Broadcast the event to all clients
+		this.broadcastEvent(gameEvent)
 		this.currentActor.send(gameEvent)
 
 		await this.checkAndHandleTransition(playerInfo)
@@ -372,20 +383,16 @@ export class GameRoom implements DurableObject {
 		if (!this.currentActor) return
 
 		const snapshot = this.currentActor.getSnapshot()
-		const nextPhase = getNextPhase(snapshot)
+		const currentPhase = getPhaseFromState(snapshot.value)
 
-		if (!nextPhase || nextPhase === this.currentPhase) return
-
-		if (nextPhase === 'setup') {
-			const input = createTransitionInput('setup', snapshot)
-			if (!input) return
-
-			if ('deck' in input) {
-				this.currentPhase = 'setup'
-				this.currentActor = createActor(setupMachine, {input})
-				this.subscribeToStateChanges()
-				this.currentActor.start()
-
+		if (currentPhase === 'setup') {
+			const stateValue = snapshot.value
+			if (
+				typeof stateValue === 'object' &&
+				stateValue !== null &&
+				'setup' in stateValue &&
+				stateValue.setup === 'shufflingPile'
+			) {
 				await this.storeTelemetryEvent({
 					type: 'PHASE_TRANSITION',
 					playerId: playerInfo.playerId,
@@ -393,40 +400,27 @@ export class GameRoom implements DurableObject {
 					timestamp: performance.now(),
 				})
 
-				this.currentActor.send({type: 'PILE_SHUFFLED'})
-				this.currentActor.send({type: 'CARDS_DEALT'})
-				this.currentActor.send({type: 'THRESHOLDS_SET'})
-				this.currentActor.send({type: 'WHEEL_SPUN', force: 0.8})
-				this.currentActor.send({type: 'FIRST_CARD_PLAYED'})
+				const events: GameEvent[] = [
+					{type: 'PILE_SHUFFLED'},
+					{type: 'CARDS_DEALT'},
+					{type: 'THRESHOLDS_SET'},
+					{type: 'WHEEL_SPUN', force: 0.8},
+					{type: 'FIRST_CARD_PLAYED'},
+				]
 
-				await this.checkAndHandleTransition(playerInfo)
-			}
-		} else if (nextPhase === 'playing') {
-			const input = createTransitionInput('playing', snapshot)
-			if (!input) return
+				for (const event of events) {
+					this.broadcastEvent(event)
+					this.currentActor.send(event)
+				}
 
-			if ('drawPile' in input) {
-				this.currentPhase = 'playing'
-				this.currentActor = createActor(playingMachine, {input})
-				this.subscribeToStateChanges()
-				this.currentActor.start()
-
-				await this.storeTelemetryEvent({
-					type: 'PHASE_TRANSITION',
-					playerId: playerInfo.playerId,
-					data: JSON.stringify({from: 'setup', to: 'playing'}),
-					timestamp: performance.now(),
+				// Broadcast snapshot after setup completion
+				const finalSnapshot = this.currentActor.getSnapshot()
+				this.broadcast({
+					type: 'STATE_SNAPSHOT',
+					state: finalSnapshot,
+					sequenceId: this.eventCounter,
 				})
 			}
-		} else if (nextPhase === 'gameOver') {
-			this.currentPhase = 'gameOver'
-
-			await this.storeTelemetryEvent({
-				type: 'PHASE_TRANSITION',
-				playerId: playerInfo.playerId,
-				data: JSON.stringify({from: 'playing', to: 'gameOver'}),
-				timestamp: performance.now(),
-			})
 		}
 
 		await this.saveState()
@@ -436,13 +430,14 @@ export class GameRoom implements DurableObject {
 		if (!this.currentActor) return
 
 		const snapshot = this.currentActor.getSnapshot()
+		const currentPhase = getPhaseFromState(snapshot.value)
 		const snapshotJson = JSON.stringify(snapshot.context)
 		const timestamp = performance.now()
 
 		this.ctx.storage.sql.exec(
 			`INSERT OR REPLACE INTO game_state (key, value, updated_at) VALUES (?, ?, ?)`,
 			'phase',
-			this.currentPhase,
+			currentPhase,
 			timestamp,
 		)
 
@@ -475,22 +470,28 @@ export class GameRoom implements DurableObject {
 	}
 
 	private async resetToLobby() {
-		this.currentPhase = 'lobby'
-		this.currentActor = createActor(lobbyMachine)
-		this.subscribeToStateChanges()
-		this.currentActor.start()
+		if (!this.currentActor) return
+
+		const playAgainEvent: GameEvent = {type: 'PLAY_AGAIN'}
+		this.broadcastEvent(playAgainEvent)
+		this.currentActor.send(playAgainEvent)
 
 		const registeredPlayers = Array.from(this.playerRegistry.values())
 		for (const player of registeredPlayers) {
-			this.currentActor.send({
+			const joinEvent: GameEvent = {
 				type: 'PLAYER_JOINED',
 				playerId: player.playerId,
 				playerName: player.playerName,
-			})
-			this.currentActor.send({
+			}
+			this.broadcastEvent(joinEvent)
+			this.currentActor.send(joinEvent)
+
+			const readyEvent: GameEvent = {
 				type: 'PLAYER_READY',
 				playerId: player.playerId,
-			})
+			}
+			this.broadcastEvent(readyEvent)
+			this.currentActor.send(readyEvent)
 		}
 
 		await this.saveState()
