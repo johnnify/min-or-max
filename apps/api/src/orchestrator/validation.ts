@@ -1,5 +1,4 @@
-import type {Snapshot} from 'xstate'
-import type {GameEvent, MinOrMaxContext} from '@repo/state'
+import type {GameEvent, MinOrMaxSnapshot} from '@repo/state'
 
 type ValidationResult = {
 	allowed: boolean
@@ -12,7 +11,7 @@ const EVENTS_REQUIRING_CURRENT_PLAYER = new Set([
 	'SEARCH_AND_DRAW',
 	'PLAY_CARD',
 	'END_TURN',
-	'SPIN_WHEEL',
+	'REQUEST_WHEEL_SPIN',
 ])
 
 const EVENTS_ALLOWED_FOR_ANY_PLAYER = new Set([
@@ -23,7 +22,7 @@ const EVENTS_ALLOWED_FOR_ANY_PLAYER = new Set([
 ])
 
 export const canPlayerSendEvent = (
-	snapshot: Snapshot<unknown> & {context?: unknown},
+	snapshot: MinOrMaxSnapshot,
 	event: GameEvent,
 	playerId: string,
 ): ValidationResult => {
@@ -32,18 +31,14 @@ export const canPlayerSendEvent = (
 	}
 
 	if (EVENTS_REQUIRING_CURRENT_PLAYER.has(event.type)) {
-		if (!snapshot.context) {
-			return {allowed: false, reason: 'No context available'}
-		}
-
-		const context = snapshot.context as MinOrMaxContext
+		const context = snapshot.context
 		const currentPlayer = context.players[context.currentPlayerIndex]
 
 		if (currentPlayer.id !== playerId) {
 			return {allowed: false, reason: 'Not your turn'}
 		}
 
-		if (event.type === 'SPIN_WHEEL' && context.hasSpunThisTurn) {
+		if (event.type === 'REQUEST_WHEEL_SPIN' && context.hasSpunThisTurn) {
 			return {allowed: false, reason: 'Already spun this turn'}
 		}
 

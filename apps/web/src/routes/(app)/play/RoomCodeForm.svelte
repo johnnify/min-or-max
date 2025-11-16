@@ -9,13 +9,14 @@
 	const inputId = 'room-code'
 </script>
 
-<form {...joinRoom} class="max-w-prose">
+<form {...joinRoom}>
 	<Field.Field>
 		<Field.Label for={inputId}>Room code</Field.Label>
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+		<div class="flex flex-wrap items-center gap-4">
 			<InputOTP.Root
 				{inputId}
 				name="code"
+				minlength={6}
 				maxlength={6}
 				pattern={PLAYING_CARDS_REGEX_STRING}
 				required
@@ -23,12 +24,12 @@
 				{#snippet children({cells})}
 					<InputOTP.Group>
 						{#each cells as cell (cell)}
-							<InputOTP.Slot {cell} />
+							<InputOTP.Slot {cell} class="size-12 text-2xl" />
 						{/each}
 					</InputOTP.Group>
 				{/snippet}
 			</InputOTP.Root>
-			<Button class="grow">Join!</Button>
+			<Button class="max-w-72 grow">Join!</Button>
 		</div>
 
 		<Field.Description>Enter a room code to join!</Field.Description>

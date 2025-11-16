@@ -110,9 +110,7 @@ export const canCardBeatTopCard = (
 	}
 }
 
-export const calculateSpin = (force: number, rng: Rng | null): number => {
-	if (!rng) return 0
-
+export const calculateSpin = (force: number, rng: Rng): number => {
 	if (force >= 0 && force <= 0.1) {
 		return rng.nextInt(15, 90)
 	} else if (force <= 0.5) {

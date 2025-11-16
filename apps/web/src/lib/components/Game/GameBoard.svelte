@@ -115,7 +115,7 @@
 				minOrMaxActor.start()
 				actorSnapshot = minOrMaxActor.getSnapshot()
 			} else if (data.type === 'CONNECTED') {
-				console.log('Connected as player:', data.playerId)
+				console.info('Connected as player:', data.playerId)
 			} else if (data.type === 'ERROR') {
 				toast.error(data.message)
 			}
@@ -167,6 +167,18 @@
 			gameState.wheelAngle,
 		)
 	}
+
+	let isCurrentPlayer = $derived(
+		gameState &&
+			gameState.currentPlayerIndex !== undefined &&
+			gameState.players[gameState.currentPlayerIndex]?.id === player.id,
+	)
+
+	let canSpinWheel = $derived(
+		gamePhase === 'playing' &&
+			isCurrentPlayer &&
+			gameState?.hasSpunThisTurn === false,
+	)
 </script>
 
 <div class="mb-[5svh] flex justify-between gap-4">
@@ -228,12 +240,13 @@
 			</ol>
 
 			<div class="flex flex-col items-center">
-				<!-- TODO: Only enabled if I can spin -->
-				<!-- TODO: Spin on click -->
 				<Wheel
 					angle={gameState.wheelAngle}
-					disabled={false}
-					onclick={() => {}}
+					disabled={!canSpinWheel}
+					onclick={() => {
+						// TODO: Calculate force based on how long button is held
+						sendMessage({type: 'REQUEST_WHEEL_SPIN', force: 0.5})
+					}}
 				/>
 
 				{#if gameState.discardPile.length}

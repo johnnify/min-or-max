@@ -24,7 +24,7 @@ describe('canPlayerSendEvent', () => {
 		actor.send({type: 'PILE_SHUFFLED'})
 		actor.send({type: 'CARDS_DEALT'})
 		actor.send({type: 'THRESHOLDS_SET'})
-		actor.send({type: 'WHEEL_SPUN', force: 0.5})
+		actor.send({type: 'WHEEL_SPUN', angle: 180})
 		actor.send({type: 'FIRST_CARD_PLAYED'})
 
 		// Now in playing phase
@@ -113,12 +113,12 @@ describe('canPlayerSendEvent', () => {
 				actor.getSnapshot().context.currentPlayerIndex
 			]
 
-		actor.send({type: 'SPIN_WHEEL', force: 0.5})
+		actor.send({type: 'WHEEL_SPUN', angle: 180})
 		const snapshot = actor.getSnapshot()
 
 		const result = canPlayerSendEvent(
 			snapshot,
-			{type: 'SPIN_WHEEL', force: 0.5},
+			{type: 'REQUEST_WHEEL_SPIN', force: 0.5},
 			currentPlayer.id,
 		)
 
@@ -137,7 +137,7 @@ describe('canPlayerSendEvent', () => {
 
 		const result = canPlayerSendEvent(
 			snapshot,
-			{type: 'SPIN_WHEEL', force: 0.5},
+			{type: 'REQUEST_WHEEL_SPIN', force: 0.5},
 			currentPlayer.id,
 		)
 

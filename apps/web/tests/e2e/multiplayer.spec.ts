@@ -1,11 +1,13 @@
 import {test, expect} from '@playwright/test'
 
 test('multiplayer game lobby and start', async ({browser}) => {
+	test.slow()
+
 	const roomId = `test-room-${Date.now()}`
 
 	const context1 = await browser.newContext()
 	const page1 = await context1.newPage()
-	await page1.goto(`/play/${roomId}?seed=e2e`)
+	await page1.goto(`/play/${roomId}?seed=playwright`)
 	await expect(page1.getByTestId('hydrated')).toBeVisible()
 
 	await expect(
@@ -56,7 +58,7 @@ test('multiplayer game lobby and start', async ({browser}) => {
 	// can see the top discard card
 	const discardPileRegion1 = page1.getByRole('list', {name: 'Discard Pile'})
 	await expect(
-		discardPileRegion1.getByRole('img', {name: '6 of clubs'}),
+		discardPileRegion1.getByRole('img', {name: 'K of diamonds'}),
 	).toBeVisible()
 
 	// Player 1 starts with 4 cards (3 + 1 already drawn for turn)
@@ -68,14 +70,17 @@ test('multiplayer game lobby and start', async ({browser}) => {
 	await expect(villainHandRegion1.getByRole('listitem')).toHaveCount(3)
 	// Player 1 cannot see the Villain's cards!
 	await expect(
-		villainHandRegion1.getByRole('img', {name: 'The back of a card!'}),
+		villainHandRegion1.getByRole('img', {name: 'The back of a card'}),
 	).toHaveCount(3)
 
-	// Player 1 plays the 4 of spades (on min mode, beats the 6 of clubs)
-	await heroHandRegion1.getByRole('button', {name: '4 of spades'}).click()
+	// Player 1 plays the 8 of spades (on min mode, beats the King of diamonds)
+	await heroHandRegion1.getByRole('button', {name: '8 of spades'}).click()
 	await expect(
-		discardPileRegion1.getByRole('img', {name: '4 of spades'}),
+		discardPileRegion1.getByRole('img', {name: '8 of spades'}),
 	).toBeVisible()
+
+	// Ideally we'd want a seed that gives us a different mode after spinning!
+	await page1.getByRole('button', {name: 'spin the wheel'}).click()
 
 	await context1.close()
 	await context2.close()

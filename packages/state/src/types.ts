@@ -62,12 +62,13 @@ export type SetupEvent =
 	| {type: 'PILE_SHUFFLED'}
 	| {type: 'CARDS_DEALT'}
 	| {type: 'THRESHOLDS_SET'}
-	| {type: 'WHEEL_SPUN'; force: number}
+	| {type: 'WHEEL_SPUN'; angle: number}
 	| {type: 'FIRST_CARD_PLAYED'}
 	| {type: 'SETUP_COMPLETE'}
 
 export type PlayingEvent =
-	| {type: 'SPIN_WHEEL'; force: number}
+	| {type: 'REQUEST_WHEEL_SPIN'; force: number}
+	| {type: 'WHEEL_SPUN'; angle: number}
 	| {type: 'CHOOSE_CARD'; cardId: string}
 	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
 	| {type: 'SEARCH_AND_DRAW'; rank: 'J' | 'Q' | 'K'}
@@ -86,7 +87,7 @@ export type ClientMessage =
 	| {type: 'START_GAME'}
 	| {type: 'CHOOSE_THRESHOLD'; threshold: number}
 	| {type: 'TURN_STARTED'}
-	| {type: 'SPIN_WHEEL'; force: number}
+	| {type: 'REQUEST_WHEEL_SPIN'; force: number}
 	| {type: 'CHOOSE_CARD'; cardId: string}
 	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
 	| {type: 'SEARCH_AND_DRAW'; rank: 'J' | 'Q' | 'K'}
@@ -103,7 +104,7 @@ export type ServerMessage =
 	| {type: 'ERROR'; message: string}
 	| {type: 'PLAYER_JOINED'; playerId: string; playerName: string}
 	| {type: 'PLAYER_LEFT'; playerId: string}
-	| {type: 'AUTO_SPIN'; force: number}
+	| {type: 'AUTO_WHEEL_SPUN'; angle: number}
 	| {type: 'AUTO_PLAY'; cardId: string}
 	| {type: 'PLAYER_SURRENDERED'; playerId: string}
 
@@ -141,8 +142,8 @@ export const isServerMessage = (data: unknown): data is ServerMessage => {
 			)
 		case 'PLAYER_LEFT':
 			return typeof message.playerId === 'string'
-		case 'AUTO_SPIN':
-			return typeof message.force === 'number'
+		case 'AUTO_WHEEL_SPUN':
+			return typeof message.angle === 'number'
 		case 'AUTO_PLAY':
 			return typeof message.cardId === 'string'
 		case 'PLAYER_SURRENDERED':

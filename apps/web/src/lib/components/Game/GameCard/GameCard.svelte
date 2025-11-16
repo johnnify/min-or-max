@@ -23,6 +23,10 @@
 	let {card, hidden = false}: Props = $props()
 
 	const src = $derived.by(() => {
+		if (hidden) {
+			return cardImages['./cards/card-back.png']?.default ?? ''
+		}
+
 		const imagePath = `./cards/${card.id}.png`
 		const imageModule = cardImages[imagePath]
 
@@ -34,23 +38,11 @@
 		return fallback?.default ?? ''
 	})
 
-	const alt = $derived(`${card.rank} of ${card.suit}`)
+	const alt = $derived(
+		hidden ? 'The back of a card!' : `${card.rank} of ${card.suit}`,
+	)
+
+	// TODO: Random slight rotation & transform per card would be neat!
 </script>
 
-{#if hidden}
-	<enhanced:img
-		src="./cards/card-back.png"
-		alt="The back of a card!"
-		class="card"
-	/>
-{:else}
-	<enhanced:img {src} {alt} class="card" />
-{/if}
-
-<style>
-	.card {
-		--rotation: calc((var(--index)) * 5deg * (var(--index) % 2));
-		z-index: calc(100 - var(--index));
-		transform: rotate(var(--rotation));
-	}
-</style>
+<enhanced:img {src} {alt} class="aspect-5/7 size-32" />

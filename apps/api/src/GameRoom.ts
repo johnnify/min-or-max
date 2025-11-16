@@ -6,7 +6,8 @@ import type {
 	ClientMessage,
 	ServerMessage,
 } from '@repo/state'
-import {getPhaseFromState, minOrMaxMachine} from '@repo/state'
+import {getPhaseFromState, minOrMaxMachine, calculateSpin} from '@repo/state'
+import type {Rng} from '@repo/rng'
 import type {PlayerInfo, StoredEvent} from './types'
 import {canPlayerSendEvent} from './orchestrator/validation'
 
@@ -315,18 +316,25 @@ export class GameRoom implements DurableObject {
 					timestamp: performance.now(),
 				})
 			} else if (!context.hasSpunThisTurn) {
-				const force = 0.5
-				gameEvent = {type: 'SPIN_WHEEL', force}
+				const autoSnapshot = this.currentActor.getSnapshot()
+				const autoContext = autoSnapshot.context as {
+					wheelAngle: number
+					rng: Rng
+				}
+				const spinDegrees = calculateSpin(0.5, autoContext.rng)
+				const newAngle = autoContext.wheelAngle + spinDegrees
+
+				gameEvent = {type: 'WHEEL_SPUN', angle: newAngle}
 
 				this.broadcast({
-					type: 'AUTO_SPIN',
-					force,
+					type: 'AUTO_WHEEL_SPUN',
+					angle: newAngle,
 				})
 
 				await this.storeTelemetryEvent({
-					type: 'AUTO_SPIN',
+					type: 'AUTO_WHEEL_SPUN',
 					playerId: playerInfo.playerId,
-					data: JSON.stringify({force}),
+					data: JSON.stringify({angle: newAngle}),
 					timestamp: performance.now(),
 				})
 			} else {
@@ -344,6 +352,16 @@ export class GameRoom implements DurableObject {
 					timestamp: performance.now(),
 				})
 			}
+		} else if (event.type === 'REQUEST_WHEEL_SPIN') {
+			const spinSnapshot = this.currentActor.getSnapshot()
+			const spinContext = spinSnapshot.context as {
+				wheelAngle: number
+				rng: Rng
+			}
+			const spinDegrees = calculateSpin(event.force, spinContext.rng)
+			const wheelSpunAngle = spinContext.wheelAngle + spinDegrees
+
+			gameEvent = {type: 'WHEEL_SPUN', angle: wheelSpunAngle}
 		} else {
 			gameEvent = event as GameEvent
 		}
@@ -394,11 +412,18 @@ export class GameRoom implements DurableObject {
 					timestamp: performance.now(),
 				})
 
+				const setupSnapshot = this.currentActor.getSnapshot()
+				const setupContext = setupSnapshot.context as {
+					wheelAngle: number
+					rng: Rng
+				}
+				const spinDegrees = calculateSpin(0.8, setupContext.rng)
+				const setupAngle = setupContext.wheelAngle + spinDegrees
 				const events: GameEvent[] = [
 					{type: 'PILE_SHUFFLED'},
 					{type: 'CARDS_DEALT'},
 					{type: 'THRESHOLDS_SET'},
-					{type: 'WHEEL_SPUN', force: 0.8},
+					{type: 'WHEEL_SPUN', angle: setupAngle},
 					{type: 'FIRST_CARD_PLAYED'},
 				]
 

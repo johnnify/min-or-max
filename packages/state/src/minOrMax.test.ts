@@ -2,7 +2,7 @@ import {createActor} from 'xstate'
 import {describe, it, expect} from 'vitest'
 import {minOrMaxMachine} from './minOrMax'
 import {Rng} from '@repo/rng'
-import {getCardValue, getModeFromWheelAngle} from './utils'
+import {getCardValue, getModeFromWheelAngle, calculateSpin} from './utils'
 import type {Card} from './types'
 
 const findValidCard = (
@@ -35,7 +35,7 @@ describe('MinOrMax Machine Tests', () => {
 
 			expect(actor.getSnapshot().value).toBe('lobby')
 			expect(actor.getSnapshot().context.players).toEqual([])
-			expect(actor.getSnapshot().context.rng).toBe(null)
+			expect(actor.getSnapshot().context.rng).not.toBe(null)
 			expect(actor.getSnapshot().context.deck).toHaveLength(52)
 			expect(actor.getSnapshot().context.deck[0]).toEqual({
 				id: 'hearts-2',
@@ -160,11 +160,12 @@ describe('MinOrMax Machine Tests', () => {
 			expect(actor.getSnapshot().context.players).toHaveLength(4)
 		})
 
-		it('should initialize RNG when SEED is sent', () => {
+		it('should update RNG seed when SEED is sent', () => {
 			const actor = createActor(minOrMaxMachine)
 			actor.start()
 
-			expect(actor.getSnapshot().context.rng).toBe(null)
+			const initialSeed = actor.getSnapshot().context.rng.seed
+			expect(initialSeed).toBeDefined()
 
 			actor.send({
 				type: 'SEED',
@@ -172,7 +173,8 @@ describe('MinOrMax Machine Tests', () => {
 			})
 
 			expect(actor.getSnapshot().context.rng).not.toBe(null)
-			expect(actor.getSnapshot().context.rng?.seed).toBe('test-seed-123')
+			expect(actor.getSnapshot().context.rng.seed).toBe('test-seed-123')
+			expect(actor.getSnapshot().context.rng.seed).not.toBe(initialSeed)
 		})
 
 		it('should mark a player as unready when PLAYER_UNREADY is sent', () => {
@@ -222,9 +224,17 @@ describe('MinOrMax Machine Tests', () => {
 			expect(actor.getSnapshot().context.players[0].id).toBe('player-2')
 		})
 
-		it('should automatically initialize RNG with timestamp seed when START_GAME is sent without manual SEED', () => {
+		it('should initialize RNG with timestamp seed on machine creation', () => {
 			const actor = createActor(minOrMaxMachine)
 			actor.start()
+
+			expect(actor.getSnapshot().context.rng).not.toBe(null)
+
+			const seed = actor.getSnapshot().context.rng.seed
+			const seedNumber = parseInt(seed, 10)
+			const now = Date.now()
+			// Seed should be a recent timestamp (within 1 second of now)
+			expect(Math.abs(seedNumber - now)).toBeLessThan(1000)
 
 			actor.send({
 				type: 'PLAYER_JOINED',
@@ -238,19 +248,9 @@ describe('MinOrMax Machine Tests', () => {
 				playerName: 'Bob',
 			})
 
-			expect(actor.getSnapshot().context.rng).toBe(null)
-
-			const beforeTime = Date.now()
 			actor.send({type: 'START_GAME'})
-			const afterTime = Date.now()
 
 			expect(actor.getSnapshot().value).toMatchObject({setup: 'shufflingPile'})
-			expect(actor.getSnapshot().context.rng).not.toBe(null)
-
-			const seed = actor.getSnapshot().context.rng!.seed
-			const seedNumber = parseInt(seed, 10)
-			expect(seedNumber).toBeGreaterThanOrEqual(beforeTime)
-			expect(seedNumber).toBeLessThanOrEqual(afterTime)
 		})
 	})
 
@@ -356,7 +356,7 @@ describe('MinOrMax Machine Tests', () => {
 
 			expect(actor.getSnapshot().context.wheelAngle).toBe(90)
 
-			actor.send({type: 'WHEEL_SPUN', force: 0.75})
+			actor.send({type: 'WHEEL_SPUN', angle: 270})
 
 			const newAngle = actor.getSnapshot().context.wheelAngle
 			expect(newAngle).toBeGreaterThan(90)
@@ -368,7 +368,7 @@ describe('MinOrMax Machine Tests', () => {
 			actor2.send({type: 'PILE_SHUFFLED'})
 			actor2.send({type: 'CARDS_DEALT'})
 			actor2.send({type: 'THRESHOLDS_SET'})
-			actor2.send({type: 'WHEEL_SPUN', force: 0.75})
+			actor2.send({type: 'WHEEL_SPUN', angle: 270})
 
 			expect(actor2.getSnapshot().context.wheelAngle).toBe(newAngle)
 		})
@@ -381,7 +381,7 @@ describe('MinOrMax Machine Tests', () => {
 			actor.send({type: 'PILE_SHUFFLED'})
 			actor.send({type: 'CARDS_DEALT'})
 			actor.send({type: 'THRESHOLDS_SET'})
-			actor.send({type: 'WHEEL_SPUN', force: 0.5})
+			actor.send({type: 'WHEEL_SPUN', angle: 270})
 
 			const beforeDrawPile = actor.getSnapshot().context.drawPile
 			const topCard = beforeDrawPile[0]
@@ -422,7 +422,11 @@ describe('MinOrMax Machine Tests', () => {
 				setup: 'spinningInitialWheel',
 			})
 
-			actor.send({type: 'WHEEL_SPUN', force: 0.8})
+			const setupContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.8, setupContext.rng)
+			const wheelAngle = setupContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
 			expect(actor.getSnapshot().value).toMatchObject({
 				setup: 'playingFirstCard',
 			})
@@ -464,7 +468,7 @@ describe('MinOrMax Machine Tests', () => {
 			actor.send({type: 'PILE_SHUFFLED'})
 			actor.send({type: 'CARDS_DEALT'})
 			actor.send({type: 'THRESHOLDS_SET'})
-			actor.send({type: 'WHEEL_SPUN', force: 0.5})
+			actor.send({type: 'WHEEL_SPUN', angle: 270})
 			actor.send({type: 'FIRST_CARD_PLAYED'})
 		}
 
@@ -696,7 +700,11 @@ describe('MinOrMax Machine Tests', () => {
 			const initialWheelAngle = actor.getSnapshot().context.wheelAngle
 			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(false)
 
-			actor.send({type: 'SPIN_WHEEL', force: 0.5})
+			const beforeContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.5, beforeContext.rng)
+			const newAngle = beforeContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
 
 			expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
 			expect(actor.getSnapshot().context.wheelAngle).not.toBe(initialWheelAngle)
@@ -710,7 +718,11 @@ describe('MinOrMax Machine Tests', () => {
 			actor.start()
 			transitionToPlaying(actor, 'max-mode-test')
 
-			actor.send({type: 'SPIN_WHEEL', force: 0.01})
+			const beforeContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.01, beforeContext.rng)
+			const newAngle = beforeContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
 			const wheelAngle = actor.getSnapshot().context.wheelAngle
 
 			if (wheelAngle < 180) {
@@ -740,7 +752,11 @@ describe('MinOrMax Machine Tests', () => {
 			actor.start()
 			transitionToPlaying(actor, 'max-mode-valid-test')
 
-			actor.send({type: 'SPIN_WHEEL', force: 0.01})
+			const beforeContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.01, beforeContext.rng)
+			const newAngle = beforeContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
 			const wheelAngle = actor.getSnapshot().context.wheelAngle
 
 			if (wheelAngle < 180) {
@@ -770,7 +786,11 @@ describe('MinOrMax Machine Tests', () => {
 			actor.start()
 			transitionToPlaying(actor, 'min-mode-test')
 
-			actor.send({type: 'SPIN_WHEEL', force: 0.9})
+			const beforeContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.9, beforeContext.rng)
+			const newAngle = beforeContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
 			const wheelAngle = actor.getSnapshot().context.wheelAngle
 			const wheelMode = getModeFromWheelAngle(wheelAngle)
 			expect(wheelMode).toBe('min')
@@ -800,7 +820,11 @@ describe('MinOrMax Machine Tests', () => {
 			actor.start()
 			transitionToPlaying(actor, 'min-mode-valid-test')
 
-			actor.send({type: 'SPIN_WHEEL', force: 0.9})
+			const beforeContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.9, beforeContext.rng)
+			const newAngle = beforeContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
 			const wheelAngle = actor.getSnapshot().context.wheelAngle
 			const wheelMode = getModeFromWheelAngle(wheelAngle)
 			expect(wheelMode).toBe('min')
@@ -894,7 +918,7 @@ describe('MinOrMax Machine Tests', () => {
 				actor.send({type: 'PILE_SHUFFLED'})
 				actor.send({type: 'CARDS_DEALT'})
 				actor.send({type: 'THRESHOLDS_SET'})
-				actor.send({type: 'WHEEL_SPUN', force: 0.5})
+				actor.send({type: 'WHEEL_SPUN', angle: 270})
 				actor.send({type: 'FIRST_CARD_PLAYED'})
 
 				for (let i = 0; i < 23; i++) {
@@ -1007,7 +1031,11 @@ describe('MinOrMax Machine Tests', () => {
 						const wheelAngleBefore = actor.getSnapshot().context.wheelAngle
 						expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(false)
 
-						actor.send({type: 'SPIN_WHEEL', force: 0.5})
+						const beforeContext = actor.getSnapshot().context
+						const spinDegrees = calculateSpin(0.5, beforeContext.rng)
+						const newAngle = beforeContext.wheelAngle + spinDegrees
+
+						actor.send({type: 'WHEEL_SPUN', angle: newAngle})
 
 						expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
 						expect(actor.getSnapshot().context.wheelAngle).toBeGreaterThan(
@@ -1030,7 +1058,11 @@ describe('MinOrMax Machine Tests', () => {
 				actor.start()
 				transitionToPlaying(actor)
 
-				actor.send({type: 'SPIN_WHEEL', force: 0.05})
+				const initialContext = actor.getSnapshot().context
+				const spinDegrees = calculateSpin(0.05, initialContext.rng)
+				const firstAngle = initialContext.wheelAngle + spinDegrees
+
+				actor.send({type: 'WHEEL_SPUN', angle: firstAngle})
 				expect(actor.getSnapshot().context.hasSpunThisTurn).toBe(true)
 
 				const currentWheelAngle = actor.getSnapshot().context.wheelAngle
@@ -1063,8 +1095,11 @@ describe('MinOrMax Machine Tests', () => {
 						})
 
 						const wheelAngleBefore = actor.getSnapshot().context.wheelAngle
+						const contextBefore = actor.getSnapshot().context
+						const spinDegrees = calculateSpin(0.8, contextBefore.rng)
+						const secondAttemptAngle = wheelAngleBefore + spinDegrees
 
-						actor.send({type: 'SPIN_WHEEL', force: 0.8})
+						actor.send({type: 'WHEEL_SPUN', angle: secondAttemptAngle})
 
 						expect(actor.getSnapshot().context.wheelAngle).toBe(
 							wheelAngleBefore,
@@ -1097,8 +1132,11 @@ describe('MinOrMax Machine Tests', () => {
 				actor.send({type: 'THRESHOLDS_SET'})
 
 				const maxThreshold = actor.getSnapshot().context.maxThreshold
+				const setupContext = actor.getSnapshot().context
+				const spinDegrees = calculateSpin(0.1, setupContext.rng)
+				const wheelAngle = setupContext.wheelAngle + spinDegrees
 
-				actor.send({type: 'WHEEL_SPUN', force: 0.1})
+				actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
 				actor.send({type: 'FIRST_CARD_PLAYED'})
 
 				for (let turn = 0; turn < 30; turn++) {
@@ -1184,8 +1222,11 @@ describe('MinOrMax Machine Tests', () => {
 				actor.send({type: 'THRESHOLDS_SET'})
 
 				const minThreshold = actor.getSnapshot().context.minThreshold
+				const setupContext = actor.getSnapshot().context
+				const spinDegrees = calculateSpin(0.9, setupContext.rng)
+				const wheelAngle = setupContext.wheelAngle + spinDegrees
 
-				actor.send({type: 'WHEEL_SPUN', force: 0.9})
+				actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
 				actor.send({type: 'FIRST_CARD_PLAYED'})
 
 				for (let turn = 0; turn < 30; turn++) {
@@ -1258,7 +1299,12 @@ describe('MinOrMax Machine Tests', () => {
 				actor.send({type: 'PILE_SHUFFLED'})
 				actor.send({type: 'CARDS_DEALT'})
 				actor.send({type: 'THRESHOLDS_SET'})
-				actor.send({type: 'WHEEL_SPUN', force: 0.1})
+
+				const setupContext = actor.getSnapshot().context
+				const spinDegrees = calculateSpin(0.1, setupContext.rng)
+				const wheelAngle = setupContext.wheelAngle + spinDegrees
+
+				actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
 				actor.send({type: 'FIRST_CARD_PLAYED'})
 
 				for (let turn = 0; turn < 30; turn++) {
@@ -1327,7 +1373,12 @@ describe('MinOrMax Machine Tests', () => {
 				actor.send({type: 'PILE_SHUFFLED'})
 				actor.send({type: 'CARDS_DEALT'})
 				actor.send({type: 'THRESHOLDS_SET'})
-				actor.send({type: 'WHEEL_SPUN', force: 0.9})
+
+				const setupContext = actor.getSnapshot().context
+				const spinDegrees = calculateSpin(0.9, setupContext.rng)
+				const wheelAngle = setupContext.wheelAngle + spinDegrees
+
+				actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
 				actor.send({type: 'FIRST_CARD_PLAYED'})
 
 				for (let turn = 0; turn < 30; turn++) {
@@ -1432,7 +1483,7 @@ describe('MinOrMax Machine Tests', () => {
 				actor.start()
 				transitionToPlaying(actor)
 
-				actor.send({type: 'SPIN_WHEEL', force: 0.5})
+				actor.send({type: 'WHEEL_SPUN', angle: 270})
 
 				const snapshot1 = actor.getSnapshot()
 				const rngData = snapshot1.context.rng!.toJSON()
@@ -1500,7 +1551,7 @@ describe('MinOrMax Machine Tests', () => {
 				actor.send({type: 'PILE_SHUFFLED'})
 				actor.send({type: 'CARDS_DEALT'})
 				actor.send({type: 'THRESHOLDS_SET'})
-				actor.send({type: 'WHEEL_SPUN', force: 0.5})
+				actor.send({type: 'WHEEL_SPUN', angle: 270})
 				actor.send({type: 'FIRST_CARD_PLAYED'})
 
 				const topCard = actor.getSnapshot().context.discardPile[0].card
@@ -1750,7 +1801,7 @@ describe('MinOrMax Machine Tests', () => {
 			expect(actor.getSnapshot().context.minThreshold).toBeLessThan(0)
 			expect(actor.getSnapshot().context.maxThreshold).toBeGreaterThan(0)
 
-			actor.send({type: 'WHEEL_SPUN', force: 0.5})
+			actor.send({type: 'WHEEL_SPUN', angle: 270})
 			expect(actor.getSnapshot().value).toMatchObject({
 				setup: 'playingFirstCard',
 			})
@@ -1853,14 +1904,18 @@ describe('MinOrMax Machine Tests', () => {
 			expect(actor.getSnapshot().context.players[2].hand).toHaveLength(3)
 
 			actor.send({type: 'THRESHOLDS_SET'})
-			actor.send({type: 'WHEEL_SPUN', force: 0.75})
+			actor.send({type: 'WHEEL_SPUN', angle: 270})
 			actor.send({type: 'FIRST_CARD_PLAYED'})
 
 			expect(actor.getSnapshot().value).toMatchObject({
 				playing: {playerTurn: 'awaitingAction'},
 			})
 
-			actor.send({type: 'SPIN_WHEEL', force: 0.9})
+			const beforeContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.9, beforeContext.rng)
+			const newAngle = beforeContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
 
 			const wheelAngle = actor.getSnapshot().context.wheelAngle
 			const isMin = wheelAngle >= 180 && wheelAngle < 360
@@ -1928,7 +1983,12 @@ describe('MinOrMax Machine Tests', () => {
 			actor.send({type: 'PILE_SHUFFLED'})
 			actor.send({type: 'CARDS_DEALT'})
 			actor.send({type: 'THRESHOLDS_SET'})
-			actor.send({type: 'WHEEL_SPUN', force: 0.3})
+
+			const setupContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.3, setupContext.rng)
+			const wheelAngle = setupContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
 			actor.send({type: 'FIRST_CARD_PLAYED'})
 
 			expect(actor.getSnapshot().value).toMatchObject({
@@ -2038,14 +2098,23 @@ describe('MinOrMax Machine Tests', () => {
 			expect(actor.getSnapshot().context.players[3].hand).toHaveLength(3)
 
 			actor.send({type: 'THRESHOLDS_SET'})
-			actor.send({type: 'WHEEL_SPUN', force: 0.95})
+
+			const setupContext = actor.getSnapshot().context
+			const setupSpinDegrees = calculateSpin(0.95, setupContext.rng)
+			const setupWheelAngle = setupContext.wheelAngle + setupSpinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: setupWheelAngle})
 			actor.send({type: 'FIRST_CARD_PLAYED'})
 
 			expect(actor.getSnapshot().value).toMatchObject({
 				playing: {playerTurn: 'awaitingAction'},
 			})
 
-			actor.send({type: 'SPIN_WHEEL', force: 0.9})
+			const beforeContext = actor.getSnapshot().context
+			const spinDegrees = calculateSpin(0.9, beforeContext.rng)
+			const newAngle = beforeContext.wheelAngle + spinDegrees
+
+			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
 
 			const wheelAngle = actor.getSnapshot().context.wheelAngle
 			const isMin = wheelAngle >= 180 && wheelAngle < 360

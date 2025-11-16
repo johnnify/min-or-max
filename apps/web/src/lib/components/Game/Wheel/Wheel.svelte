@@ -23,6 +23,7 @@
 		buttonVariants.base,
 		'bg-card border-border flex size-32 flex-col rounded-full border',
 	)}
+	aria-label="spin the wheel"
 >
 	{#if mode === 'min'}
 		<MinIcon />

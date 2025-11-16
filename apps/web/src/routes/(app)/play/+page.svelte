@@ -13,5 +13,7 @@
 		lobby!
 	</Lead>
 
+	<!-- TODO: Join random lobby! -->
+
 	<RoomCodeForm />
 </main>

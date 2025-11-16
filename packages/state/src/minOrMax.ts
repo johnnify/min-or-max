@@ -1,15 +1,7 @@
-import {
-	assign,
-	and,
-	enqueueActions,
-	setup,
-	type ActorRefFrom,
-	type SnapshotFrom,
-} from 'xstate'
+import {assign, and, setup, type ActorRefFrom, type SnapshotFrom} from 'xstate'
 import {Rng, shuffle} from '@repo/rng'
 import type {ActiveEffect, Card, PlayedCard, Player, GameEvent} from './types'
 import {
-	calculateSpin,
 	createStandardDeck,
 	getCardValue,
 	calculateCurrentPlayerWins,
@@ -24,7 +16,7 @@ export type MinOrMaxContext = {
 	minPlayers: number
 	maxPlayers: number
 	deck: Card[]
-	rng: Rng | null
+	rng: Rng
 
 	// Setup & Playing data
 	drawPile: Card[]
@@ -76,8 +68,8 @@ export const minOrMaxMachine = setup({
 			},
 		}),
 		initializeRng: assign({
-			rng: ({event}) => {
-				if (event.type !== 'SEED') return null
+			rng: ({context, event}) => {
+				if (event.type !== 'SEED') return context.rng
 				return new Rng(event.seed)
 			},
 		}),
@@ -97,21 +89,10 @@ export const minOrMaxMachine = setup({
 				return context.players.filter((player) => player.id !== event.playerId)
 			},
 		}),
-		ensureRngAndStart: enqueueActions(({context, enqueue}) => {
-			if (context.rng === null) {
-				const seed = Date.now().toString()
-				enqueue.assign({
-					rng: new Rng(seed),
-				})
-			}
-		}),
 
 		// Setup actions
 		shuffleDeck: assign({
-			drawPile: ({context}) => {
-				if (!context.rng) return context.deck
-				return shuffle(context.deck, context.rng)
-			},
+			drawPile: ({context}) => shuffle(context.deck, context.rng),
 		}),
 		dealCards: assign(({context}) => {
 			const newDrawPile = [...context.drawPile]
@@ -135,21 +116,8 @@ export const minOrMaxMachine = setup({
 			}
 		}),
 		generateThresholds: assign({
-			minThreshold: ({context}) => {
-				if (!context.rng) return 0
-				return context.rng.nextInt(-20, -10)
-			},
-			maxThreshold: ({context}) => {
-				if (!context.rng) return 0
-				return context.rng.nextInt(30, 50)
-			},
-		}),
-		updateWheelAngle: assign({
-			wheelAngle: ({context, event}) => {
-				if (event.type !== 'WHEEL_SPUN') return context.wheelAngle
-				const spinDegrees = calculateSpin(event.force, context.rng)
-				return context.wheelAngle + spinDegrees
-			},
+			minThreshold: ({context}) => context.rng.nextInt(-20, -10),
+			maxThreshold: ({context}) => context.rng.nextInt(30, 50),
 		}),
 		playFirstCard: assign(({context}) => {
 			const card = context.drawPile[0]
@@ -172,6 +140,7 @@ export const minOrMaxMachine = setup({
 				drawPile: newDrawPile,
 				discardPile: [playedCard],
 				currentScore: context.currentScore + playedValue,
+				hasSpunThisTurn: false,
 			}
 		}),
 
@@ -183,7 +152,7 @@ export const minOrMaxMachine = setup({
 
 			const [topCard, ...cardsToReshuffle] = context.discardPile
 			const cards = cardsToReshuffle.map((playedCard) => playedCard.card)
-			const shuffled = shuffle(cards, context.rng!)
+			const shuffled = shuffle(cards, context.rng)
 
 			return {
 				drawPile: shuffled,
@@ -257,30 +226,29 @@ export const minOrMaxMachine = setup({
 				drawPile: newDrawPile,
 			}
 		}),
-		spinWheel: assign({
-			wheelAngle: ({context, event}) => {
-				if (event.type !== 'SPIN_WHEEL') return context.wheelAngle
-				const spinDegrees = calculateSpin(event.force, context.rng)
-				return context.wheelAngle + spinDegrees
+		applyWheelSpin: assign({
+			wheelAngle: ({event}) => {
+				if (event.type !== 'WHEEL_SPUN') throw new Error('Invalid event type')
+				return event.angle
 			},
 			hasSpunThisTurn: true,
 		}),
 		playCard: assign(({context}) => {
 			if (!context.chosenCard) return {}
 
+			const chosenCard = context.chosenCard
+
 			const updatedPlayers = context.players.map((player, index) => {
 				if (index === context.currentPlayerIndex) {
 					return {
 						...player,
-						hand: player.hand.filter(
-							(card) => card.id !== context.chosenCard!.id,
-						),
+						hand: player.hand.filter((card) => card.id !== chosenCard.id),
 					}
 				}
 				return player
 			})
 
-			let cardValue = getCardValue(context.chosenCard.rank)
+			let cardValue = getCardValue(chosenCard.rank)
 
 			const newActiveEffects: ActiveEffect[] = []
 			for (const effect of context.activeEffects) {
@@ -300,7 +268,7 @@ export const minOrMaxMachine = setup({
 			const playedValue = wheelMode === 'max' ? cardValue : -cardValue
 
 			const playedCard: PlayedCard = {
-				card: context.chosenCard,
+				card: chosenCard,
 				playedValue,
 				playedBy: context.players[context.currentPlayerIndex].id,
 			}
@@ -315,9 +283,8 @@ export const minOrMaxMachine = setup({
 			}
 		}),
 		advanceToNextPlayer: assign({
-			currentPlayerIndex: ({context}) => {
-				return (context.currentPlayerIndex + 1) % context.players.length
-			},
+			currentPlayerIndex: ({context}) =>
+				(context.currentPlayerIndex + 1) % context.players.length,
 			hasSpunThisTurn: false,
 			chosenCard: null,
 		}),
@@ -396,9 +363,7 @@ export const minOrMaxMachine = setup({
 		chosenCardHasEffect: ({context}) => {
 			return context.chosenCard?.effect !== undefined
 		},
-		hasNotSpunThisTurn: ({context}) => {
-			return !context.hasSpunThisTurn
-		},
+		hasNotSpunThisTurn: ({context}) => !context.hasSpunThisTurn,
 		isExactThreshold: ({context}) => {
 			return (
 				context.currentScore === context.minThreshold ||
@@ -420,7 +385,7 @@ export const minOrMaxMachine = setup({
 		minPlayers: 2,
 		maxPlayers: 4,
 		deck: createStandardDeck(),
-		rng: null,
+		rng: new Rng(Date.now().toString()),
 		drawPile: [],
 		discardPile: [],
 		currentScore: 0,
@@ -457,7 +422,6 @@ export const minOrMaxMachine = setup({
 				START_GAME: {
 					target: 'setup',
 					guard: and(['hasMinimumPlayers', 'allPlayersReady']),
-					actions: 'ensureRngAndStart',
 				},
 			},
 		},
@@ -492,7 +456,7 @@ export const minOrMaxMachine = setup({
 					on: {
 						WHEEL_SPUN: {
 							target: 'playingFirstCard',
-							actions: 'updateWheelAngle',
+							actions: 'applyWheelSpin',
 						},
 					},
 				},
@@ -520,8 +484,8 @@ export const minOrMaxMachine = setup({
 					states: {
 						awaitingAction: {
 							on: {
-								SPIN_WHEEL: {
-									actions: 'spinWheel',
+								WHEEL_SPUN: {
+									actions: 'applyWheelSpin',
 								},
 								CHOOSE_CARD: {
 									target: 'processingCard',
@@ -581,9 +545,9 @@ export const minOrMaxMachine = setup({
 								},
 							],
 							on: {
-								SPIN_WHEEL: {
+								WHEEL_SPUN: {
 									guard: 'hasNotSpunThisTurn',
-									actions: 'spinWheel',
+									actions: 'applyWheelSpin',
 								},
 								END_TURN: {
 									target: '#minOrMax.playing.turnStart',
