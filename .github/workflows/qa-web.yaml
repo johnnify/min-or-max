@@ -29,20 +29,23 @@ jobs:
   browser-tests:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./apps/web
     steps:
       - uses: actions/checkout@v5
       - uses: jdx/mise-action@v3
+      - name: Copy committed test environment variables
+        run: cp .env.test .env
       - name: Install dependencies
         run: pnpm install
-      - name: Build the app
+      - name: Start API dev server
+        run: pnpm --filter @repo/api dev &
+      - name: Build the web app
+        working-directory: ./apps/web
         run: pnpm build
       - name: Install Playwright Browsers
+        working-directory: ./apps/web
         run: pnpm exec playwright install --with-deps
       - name: Run Playwright tests
-        run: pnpm test
+        run: pnpm --filter @repo/web test
       - uses: actions/upload-artifact@v5
         if: always()
         with:
