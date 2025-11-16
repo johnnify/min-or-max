@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {SvelteMap} from 'svelte/reactivity'
 	import {createActor} from 'xstate'
+	import {toast} from 'svelte-sonner'
 	import {
 		getPhaseFromState,
 		minOrMaxMachine,
@@ -9,16 +10,17 @@
 		isGameEvent,
 		isMinOrMaxSnapshot,
 		type ClientMessage,
+		type MinOrMaxSnapshot,
 	} from '@repo/state'
 	import TickCircleIcon from '~icons/mdi/tick-circle-outline'
 
+	import {browser} from '$app/environment'
 	import {PUBLIC_API_URL} from '$env/static/public'
 	import Wheel from '$lib/components/Game/Wheel/Wheel.svelte'
 	import {Button} from '$lib/components/ui/button'
 	import Badge from '$lib/components/ui/badge/badge.svelte'
-	import {browser} from '$app/environment'
-	import {toast} from 'svelte-sonner'
-	import {Spinner} from '../ui/spinner'
+	import {Spinner} from '$lib/components/ui/spinner'
+	import Lobby from './Lobby.svelte'
 
 	type Props = {
 		roomId: string
@@ -27,31 +29,40 @@
 	}
 	let {roomId, player, seed}: Props = $props()
 
-	let roomIdToWs = new SvelteMap<string, WebSocket>()
+	let roomIdsToWs = new SvelteMap<string, WebSocket>()
 
 	let minOrMaxActor = $state(createActor(minOrMaxMachine))
+	let actorSnapshot = $state<MinOrMaxSnapshot>()
 
 	$effect(() => {
-		minOrMaxActor.start()
-		return () => minOrMaxActor.stop()
+		const currentActor = minOrMaxActor
+		currentActor.start()
+		actorSnapshot = currentActor.getSnapshot()
+		const subscription = currentActor.subscribe((snapshot) => {
+			actorSnapshot = snapshot
+		})
+		return () => {
+			subscription.unsubscribe()
+			currentActor.stop()
+		}
 	})
 
 	const sendMessage = (message: ClientMessage) => {
-		const ws = roomIdToWs.get(roomId)
+		const ws = roomIdsToWs.get(roomId)
 		if (ws && ws.readyState === WebSocket.OPEN) {
 			ws.send(JSON.stringify(message))
 		}
 	}
 
 	$effect(() => {
-		if (!browser || roomIdToWs.has(roomId)) return
+		if (!browser || roomIdsToWs.has(roomId)) return
 
 		// close and delete any other connections
-		roomIdToWs.forEach((ws, id) => {
+		roomIdsToWs.forEach((ws, id) => {
 			if (id === roomId) return
 
 			ws.close()
-			roomIdToWs.delete(id)
+			roomIdsToWs.delete(id)
 		})
 
 		const wsBaseUrl = PUBLIC_API_URL.replace(/^http/, 'ws')
@@ -62,7 +73,7 @@
 		}
 
 		const ws = new WebSocket(`${wsUrl}/api/room/${roomId}`)
-		roomIdToWs.set(roomId, ws)
+		roomIdsToWs.set(roomId, ws)
 
 		ws.onopen = () => {
 			ws.send(
@@ -84,6 +95,7 @@
 
 			if (isGameEvent(data)) {
 				// Apply the event to the local state machine
+				console.info('Received game event:', data.event)
 				minOrMaxActor.send(data.event)
 			} else if (isStateSnapshot(data)) {
 				if (!isMinOrMaxSnapshot(data.state)) {
@@ -96,9 +108,9 @@
 					snapshot: data.state,
 				})
 				minOrMaxActor.start()
+				actorSnapshot = minOrMaxActor.getSnapshot()
 			} else if (data.type === 'CONNECTED') {
 				console.log('Connected as player:', data.playerId)
-				sendMessage({type: 'READY'})
 			} else if (data.type === 'ERROR') {
 				toast.error(data.message)
 			}
@@ -110,14 +122,16 @@
 		}
 
 		ws.onclose = () => {
-			roomIdToWs.delete(roomId)
+			roomIdsToWs.delete(roomId)
 		}
 	})
 
-	let isConnected = $derived(roomIdToWs.has(roomId))
+	let isConnected = $derived(roomIdsToWs.has(roomId))
 
-	let gamePhase = $derived(getPhaseFromState(minOrMaxActor.getSnapshot().value))
-	let gameState = $derived(minOrMaxActor.getSnapshot().context)
+	let gamePhase = $derived(
+		actorSnapshot ? getPhaseFromState(actorSnapshot.value) : 'lobby',
+	)
+	let gameState = $derived(actorSnapshot?.context)
 </script>
 
 <div class="mb-[5svh] flex justify-between gap-4">
@@ -133,16 +147,16 @@
 	</Badge>
 </div>
 
-{#if gamePhase === 'lobby'}
-	<!-- Connected -->
-	<div>
-		<h2>Connected players</h2>
-		<ul>
-			<li>TODO: Player 1</li>
-			<li>TODO: Player 2</li>
-		</ul>
-	</div>
-	<Button onclick={() => sendMessage({type: 'START_GAME'})}>Start!</Button>
+{#if !gameState}
+	<Spinner class="size-5" />
+{:else if gamePhase === 'lobby'}
+	<Lobby
+		{gameState}
+		{player}
+		handleGameStart={() => {
+			sendMessage({type: 'START_GAME'})
+		}}
+	/>
 {:else}
 	<div class="space-y-4">
 		<aside class="grid grid-cols-12 gap-4 font-mono text-sm">
@@ -161,8 +175,6 @@
 		</aside>
 
 		<section class="grid gap-8 py-8">
-			TODO
-
 			<div class="flex flex-col items-center">
 				<!-- TODO: Actual angle -->
 				<!-- TODO: Spin on click -->
