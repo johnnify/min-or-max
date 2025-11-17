@@ -315,7 +315,7 @@ describe('MinOrMax Machine Tests', () => {
 			expect(allCards).toHaveLength(52)
 		})
 
-		it('should generate min and max thresholds using RNG', () => {
+		it('should generate max threshold using RNG', () => {
 			const actor = createActor(minOrMaxMachine)
 			actor.start()
 			transitionToSetup(actor)
@@ -323,14 +323,11 @@ describe('MinOrMax Machine Tests', () => {
 			actor.send({type: 'PILE_SHUFFLED'})
 			actor.send({type: 'CARDS_DEALT'})
 
-			expect(actor.getSnapshot().context.minThreshold).toBe(0)
 			expect(actor.getSnapshot().context.maxThreshold).toBe(0)
 
 			actor.send({type: 'THRESHOLDS_SET'})
 
-			const {minThreshold, maxThreshold} = actor.getSnapshot().context
-			expect(minThreshold).toBeGreaterThanOrEqual(-20)
-			expect(minThreshold).toBeLessThanOrEqual(-10)
+			const {maxThreshold} = actor.getSnapshot().context
 			expect(maxThreshold).toBeGreaterThanOrEqual(30)
 			expect(maxThreshold).toBeLessThanOrEqual(50)
 
@@ -341,7 +338,6 @@ describe('MinOrMax Machine Tests', () => {
 			actor2.send({type: 'CARDS_DEALT'})
 			actor2.send({type: 'THRESHOLDS_SET'})
 
-			expect(actor2.getSnapshot().context.minThreshold).toBe(minThreshold)
 			expect(actor2.getSnapshot().context.maxThreshold).toBe(maxThreshold)
 		})
 
@@ -373,7 +369,7 @@ describe('MinOrMax Machine Tests', () => {
 			expect(actor2.getSnapshot().context.wheelAngle).toBe(newAngle)
 		})
 
-		it('should play first card from draw pile to discard pile and update score', () => {
+		it('should play first card from draw pile to discard pile and update tally', () => {
 			const actor = createActor(minOrMaxMachine)
 			actor.start()
 			transitionToSetup(actor)
@@ -388,7 +384,7 @@ describe('MinOrMax Machine Tests', () => {
 			const drawPileLength = beforeDrawPile.length
 
 			expect(actor.getSnapshot().context.discardPile).toHaveLength(0)
-			expect(actor.getSnapshot().context.currentScore).toBe(0)
+			expect(actor.getSnapshot().context.tally).toBe(0)
 
 			actor.send({type: 'FIRST_CARD_PLAYED'})
 
@@ -396,7 +392,7 @@ describe('MinOrMax Machine Tests', () => {
 			expect(context.drawPile).toHaveLength(drawPileLength - 2)
 			expect(context.discardPile).toHaveLength(1)
 			expect(context.discardPile[0].card).toEqual(topCard)
-			expect(context.currentScore).not.toBe(0)
+			expect(context.tally).toBeGreaterThan(0)
 			expect(actor.getSnapshot().value).toMatchObject({
 				playing: {playerTurn: 'awaitingAction'},
 			})
@@ -441,10 +437,9 @@ describe('MinOrMax Machine Tests', () => {
 			expect(finalContext.players[1].hand).toHaveLength(3)
 			expect(finalContext.drawPile.length).toBeGreaterThan(0)
 			expect(finalContext.discardPile).toHaveLength(1)
-			expect(finalContext.minThreshold).toBeLessThan(0)
 			expect(finalContext.maxThreshold).toBeGreaterThan(0)
 			expect(finalContext.wheelAngle).toBeGreaterThan(90)
-			expect(finalContext.currentScore).not.toBe(0)
+			expect(finalContext.tally).toBeGreaterThan(0)
 		})
 	})
 
@@ -513,14 +508,14 @@ describe('MinOrMax Machine Tests', () => {
 			}
 		})
 
-		it('should play chosen card to discard pile, remove from hand, and update score', () => {
+		it('should play chosen card to discard pile, remove from hand, and update tally', () => {
 			const actor = createActor(minOrMaxMachine)
 			actor.start()
 			transitionToPlaying(actor)
 
 			const handBefore = actor.getSnapshot().context.players[0].hand.length
 			const discardBefore = actor.getSnapshot().context.discardPile.length
-			const scoreBefore = actor.getSnapshot().context.currentScore
+			const tallyBefore = actor.getSnapshot().context.tally
 
 			const topCard = actor.getSnapshot().context.discardPile[0].card
 			const wheelAngle = actor.getSnapshot().context.wheelAngle
@@ -567,7 +562,7 @@ describe('MinOrMax Machine Tests', () => {
 							).toBeUndefined()
 							expect(context.discardPile).toHaveLength(discardBefore + 1)
 							expect(context.discardPile[0].card).toEqual(cardToPlay)
-							expect(context.currentScore).not.toBe(scoreBefore)
+							expect(context.tally).not.toBe(tallyBefore)
 							if (actor.getSnapshot().value !== 'gameOver') {
 								expect(actor.getSnapshot().value).toMatchObject({
 									playing: {playerTurn: 'postCardPlay'},
@@ -646,7 +641,7 @@ describe('MinOrMax Machine Tests', () => {
 					})
 				}
 				actor.send({type: 'PLAY_CARD'})
-				const scoreAfterAlice = actor.getSnapshot().context.currentScore
+				const tallyAfterAlice = actor.getSnapshot().context.tally
 
 				if (actor.getSnapshot().value !== 'gameOver') {
 					actor.send({type: 'END_TURN'})
@@ -673,8 +668,8 @@ describe('MinOrMax Machine Tests', () => {
 						}
 						actor.send({type: 'PLAY_CARD'})
 
-						const scoreAfterBob = actor.getSnapshot().context.currentScore
-						expect(scoreAfterBob).not.toBe(scoreAfterAlice)
+						const tallyAfterBob = actor.getSnapshot().context.tally
+						expect(tallyAfterBob).toBeGreaterThan(tallyAfterAlice)
 						expect(actor.getSnapshot().context.discardPile[0].card).toEqual(
 							bobValidCard,
 						)
@@ -1165,9 +1160,9 @@ describe('MinOrMax Machine Tests', () => {
 
 					actor.send({type: 'CHOOSE_CARD', cardId: playableCard.id})
 					if (playableCard.effect) {
-						const currentScore = snapshot.context.currentScore
+						const currentTally = snapshot.context.tally
 						const cardValue = getCardValue(playableCard.rank)
-						const neededToMax = maxThreshold - currentScore
+						const neededToMax = maxThreshold - currentTally
 						const effectValue =
 							neededToMax === cardValue + 10
 								? 10
@@ -1187,86 +1182,7 @@ describe('MinOrMax Machine Tests', () => {
 
 					if (actor.getSnapshot().value === 'gameOver') {
 						if (actor.getSnapshot().context.reason === 'exact_threshold') {
-							expect(actor.getSnapshot().context.currentScore).toBe(
-								maxThreshold,
-							)
-							expect(actor.getSnapshot().context.winner?.id).toBe(
-								`player-${currentPlayerIndex + 1}`,
-							)
-						}
-						break
-					}
-
-					actor.send({type: 'END_TURN'})
-				}
-			})
-
-			it('should transition to gameOver when score exactly matches minThreshold', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-
-				actor.send({
-					type: 'PLAYER_JOINED',
-					playerId: 'player-1',
-					playerName: 'Alice',
-				})
-				actor.send({
-					type: 'PLAYER_JOINED',
-					playerId: 'player-2',
-					playerName: 'Bob',
-				})
-				actor.send({type: 'SEED', seed: 'exact-min-test'})
-				actor.send({type: 'START_GAME'})
-				actor.send({type: 'PILE_SHUFFLED'})
-				actor.send({type: 'CARDS_DEALT'})
-				actor.send({type: 'THRESHOLDS_SET'})
-
-				const minThreshold = actor.getSnapshot().context.minThreshold
-				const setupContext = actor.getSnapshot().context
-				const spinDegrees = calculateSpin(0.9, setupContext.rng)
-				const wheelAngle = setupContext.wheelAngle + spinDegrees
-
-				actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
-				actor.send({type: 'FIRST_CARD_PLAYED'})
-
-				for (let turn = 0; turn < 30; turn++) {
-					const snapshot = actor.getSnapshot()
-					if (snapshot.value === 'gameOver') break
-
-					const currentPlayerIndex = snapshot.context.currentPlayerIndex
-					const currentPlayer = snapshot.context.players[currentPlayerIndex]
-
-					const playableCard = currentPlayer.hand.find((card) => {
-						const topCard = snapshot.context.discardPile[0]
-						if (!topCard) return true
-						if (card.rank === 'A' || topCard.card.rank === 'A') return true
-						const wheelAngle = snapshot.context.wheelAngle
-						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-						const cardValue = getCardValue(card.rank)
-						const topValue = getCardValue(topCard.card.rank)
-						if (wheelMode === 'max') {
-							return cardValue >= topValue
-						} else {
-							return cardValue <= topValue
-						}
-					})
-
-					if (!playableCard) break
-
-					actor.send({type: 'CHOOSE_CARD', cardId: playableCard.id})
-					if (playableCard.effect) {
-						actor.send({
-							type: 'ADD_EFFECT',
-							effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
-						})
-					}
-					actor.send({type: 'PLAY_CARD'})
-
-					if (actor.getSnapshot().value === 'gameOver') {
-						if (actor.getSnapshot().context.reason === 'exact_threshold') {
-							expect(actor.getSnapshot().context.currentScore).toBe(
-								minThreshold,
-							)
+							expect(actor.getSnapshot().context.tally).toBe(maxThreshold)
 							expect(actor.getSnapshot().context.winner?.id).toBe(
 								`player-${currentPlayerIndex + 1}`,
 							)
@@ -1311,7 +1227,7 @@ describe('MinOrMax Machine Tests', () => {
 					const snapshot = actor.getSnapshot()
 					if (snapshot.value === 'gameOver') {
 						if (snapshot.context.reason === 'exceeded_threshold') {
-							expect(snapshot.context.currentScore).toBeGreaterThan(
+							expect(snapshot.context.tally).toBeGreaterThan(
 								snapshot.context.maxThreshold,
 							)
 							expect(snapshot.context.winner).not.toBe(null)
@@ -1354,45 +1270,399 @@ describe('MinOrMax Machine Tests', () => {
 				}
 			})
 
-			it('should transition to gameOver when score exceeds minThreshold', () => {
+			describe('story: complete game to victory', () => {
+				it('should play a realistic multi-turn game ending in a win', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'victory-story-test')
+
+					expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
+					expect(actor.getSnapshot().context.players[0].hand).toHaveLength(4)
+
+					const playCard = () => {
+						const snapshot = actor.getSnapshot()
+						const currentPlayerIndex = snapshot.context.currentPlayerIndex
+						const currentPlayer = snapshot.context.players[currentPlayerIndex]
+						const topCard = snapshot.context.discardPile[0].card
+						const wheelAngle = snapshot.context.wheelAngle
+						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
+						const cardToPlay = findValidCard(
+							currentPlayer.hand,
+							topCard,
+							wheelMode,
+						)
+
+						if (cardToPlay) {
+							actor.send({type: 'CHOOSE_CARD', cardId: cardToPlay.id})
+							if (cardToPlay.effect) {
+								actor.send({
+									type: 'ADD_EFFECT',
+									effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
+								})
+							}
+							actor.send({type: 'PLAY_CARD'})
+							if (actor.getSnapshot().value !== 'gameOver') {
+								actor.send({type: 'END_TURN'})
+							}
+						}
+					}
+
+					for (let turn = 0; turn < 10; turn++) {
+						if (actor.getSnapshot().value === 'gameOver') {
+							break
+						}
+						playCard()
+					}
+
+					expect(actor.getSnapshot().context.players).toHaveLength(2)
+				})
+			})
+
+			describe('state serialization', () => {
+				it('should serialize and restore RNG state for deterministic gameplay', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor)
+
+					actor.send({type: 'WHEEL_SPUN', angle: 270})
+
+					const snapshot1 = actor.getSnapshot()
+					const rngData = snapshot1.context.rng!.toJSON()
+
+					const restoredRng = Rng.fromJSON(rngData)
+
+					const nextValuesOriginal = [
+						snapshot1.context.rng!.next(),
+						snapshot1.context.rng!.next(),
+						snapshot1.context.rng!.next(),
+					]
+
+					const nextValuesRestored = [
+						restoredRng.next(),
+						restoredRng.next(),
+						restoredRng.next(),
+					]
+
+					expect(nextValuesRestored).toEqual(nextValuesOriginal)
+					expect(restoredRng.seed).toBe(snapshot1.context.rng!.seed)
+					expect(restoredRng.callCount).toBe(snapshot1.context.rng!.callCount)
+				})
+			})
+
+			describe('surrender conditions', () => {
+				it('should transition to gameOver when player surrenders', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor)
+
+					expect(actor.getSnapshot().value).toMatchObject({
+						playing: {playerTurn: 'awaitingAction'},
+					})
+
+					actor.send({type: 'SURRENDER'})
+
+					expect(actor.getSnapshot().value).toBe('gameOver')
+					expect(actor.getSnapshot().context.winner?.id).toBe('player-2')
+					expect(actor.getSnapshot().context.losers).toHaveLength(1)
+					expect(actor.getSnapshot().context.losers[0].id).toBe('player-1')
+					expect(actor.getSnapshot().context.reason).toBe('surrendered')
+				})
+
+				it('should handle surrender with multiple players correctly', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+
+					actor.send({
+						type: 'PLAYER_JOINED',
+						playerId: 'player-1',
+						playerName: 'Alice',
+					})
+					actor.send({
+						type: 'PLAYER_JOINED',
+						playerId: 'player-2',
+						playerName: 'Bob',
+					})
+					actor.send({
+						type: 'PLAYER_JOINED',
+						playerId: 'player-3',
+						playerName: 'Charlie',
+					})
+					actor.send({type: 'SEED', seed: '3p-surrender-test'})
+					actor.send({type: 'START_GAME'})
+					actor.send({type: 'PILE_SHUFFLED'})
+					actor.send({type: 'CARDS_DEALT'})
+					actor.send({type: 'THRESHOLDS_SET'})
+					actor.send({type: 'WHEEL_SPUN', angle: 270})
+					actor.send({type: 'FIRST_CARD_PLAYED'})
+
+					const topCard = actor.getSnapshot().context.discardPile[0].card
+					const wheelAngle = actor.getSnapshot().context.wheelAngle
+					const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
+					const hand = actor.getSnapshot().context.players[0].hand
+					const cardToPlay = findValidCard(hand, topCard, wheelMode)
+
+					if (cardToPlay) {
+						actor.send({type: 'CHOOSE_CARD', cardId: cardToPlay.id})
+						if (cardToPlay.rank === 'A') {
+							actor.send({
+								type: 'ADD_EFFECT',
+								effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
+							})
+						}
+						actor.send({type: 'PLAY_CARD'})
+						if (actor.getSnapshot().value !== 'gameOver') {
+							actor.send({type: 'END_TURN'})
+						}
+					}
+
+					if (actor.getSnapshot().value !== 'gameOver') {
+						actor.send({type: 'SURRENDER'})
+
+						expect(actor.getSnapshot().value).toBe('gameOver')
+						expect(actor.getSnapshot().context.winner?.id).toBe('player-1')
+						expect(actor.getSnapshot().context.losers).toHaveLength(2)
+					}
+					expect(
+						actor
+							.getSnapshot()
+							.context.losers.map((p) => p.id)
+							.sort(),
+					).toEqual(['player-2', 'player-3'])
+					expect(actor.getSnapshot().context.reason).toBe('surrendered')
+				})
+
+				it('should handle surrender when first player (index 0) surrenders', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor)
+
+					actor.send({type: 'SURRENDER'})
+
+					expect(actor.getSnapshot().value).toBe('gameOver')
+					expect(actor.getSnapshot().context.winner?.id).toBe('player-2')
+					expect(actor.getSnapshot().context.losers[0].id).toBe('player-1')
+					expect(actor.getSnapshot().context.reason).toBe('surrendered')
+				})
+			})
+
+			describe('card effects', () => {
+				it('should play small Ace (value 1) by adding zero-value effect', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'ace-small-test')
+
+					const aceCard = actor
+						.getSnapshot()
+						.context.players[0].hand.find((card) => card.rank === 'A')
+
+					if (aceCard) {
+						const scoreBefore = actor.getSnapshot().context.tally
+
+						actor.send({type: 'CHOOSE_CARD', cardId: aceCard.id})
+
+						expect(actor.getSnapshot().value).toMatchObject({
+							playing: {playerTurn: 'configuringEffect'},
+						})
+
+						actor.send({
+							type: 'ADD_EFFECT',
+							effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
+						})
+
+						expect(actor.getSnapshot().context.activeEffects).toEqual([
+							{type: 'value-adder', value: 0, stacksRemaining: 1},
+						])
+
+						actor.send({type: 'PLAY_CARD'})
+
+						const wheelAngle = actor.getSnapshot().context.wheelAngle
+						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
+						const expectedScore =
+							wheelMode === 'max' ? scoreBefore + 1 : scoreBefore - 1
+
+						expect(actor.getSnapshot().context.tally).toBe(expectedScore)
+						expect(actor.getSnapshot().context.activeEffects).toEqual([])
+						expect(actor.getSnapshot().context.discardPile[0].playedValue).toBe(
+							wheelMode === 'max' ? 1 : -1,
+						)
+					}
+				})
+
+				it('should play big Ace (value 11) by adding ten-value effect', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'ace-big-test')
+
+					const aceCard = actor
+						.getSnapshot()
+						.context.players[0].hand.find((card) => card.rank === 'A')
+
+					if (aceCard) {
+						const scoreBefore = actor.getSnapshot().context.tally
+
+						actor.send({type: 'CHOOSE_CARD', cardId: aceCard.id})
+						actor.send({
+							type: 'ADD_EFFECT',
+							effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
+						})
+
+						actor.send({type: 'PLAY_CARD'})
+
+						const wheelAngle = actor.getSnapshot().context.wheelAngle
+						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
+						const expectedScore =
+							wheelMode === 'max' ? scoreBefore + 11 : scoreBefore - 11
+
+						expect(actor.getSnapshot().context.tally).toBe(expectedScore)
+						expect(actor.getSnapshot().context.activeEffects).toEqual([])
+						expect(actor.getSnapshot().context.discardPile[0].playedValue).toBe(
+							wheelMode === 'max' ? 11 : -11,
+						)
+					}
+				})
+
+				it('should find and draw Jack target card when it exists in draw pile', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'jack-courtship-test')
+
+					const jackCard = actor
+						.getSnapshot()
+						.context.players[0].hand.find(
+							(card) => card.rank === 'J' && card.effect?.type === 'choice',
+						)
+
+					if (jackCard) {
+						const handLengthBefore =
+							actor.getSnapshot().context.players[0].hand.length
+						const drawPileBefore = actor.getSnapshot().context.drawPile
+
+						actor.send({type: 'CHOOSE_CARD', cardId: jackCard.id})
+
+						expect(actor.getSnapshot().value).toMatchObject({
+							playing: {playerTurn: 'configuringEffect'},
+						})
+
+						const targetRank = 'Q'
+						const targetExists = drawPileBefore.some(
+							(c) => c.rank === targetRank,
+						)
+
+						actor.send({type: 'SEARCH_AND_DRAW', rank: targetRank})
+
+						if (targetExists) {
+							const handAfterDraw = actor.getSnapshot().context.players[0].hand
+							expect(handAfterDraw.length).toBeGreaterThan(handLengthBefore)
+							expect(handAfterDraw.some((c) => c.rank === targetRank)).toBe(
+								true,
+							)
+						}
+
+						actor.send({type: 'PLAY_CARD'})
+
+						expect(actor.getSnapshot().context.discardPile[0].card).toEqual(
+							jackCard,
+						)
+					}
+				})
+
+				it('should handle Jack effect gracefully when target card not found', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'jack-no-target-test')
+
+					const jackCard = actor
+						.getSnapshot()
+						.context.players[0].hand.find(
+							(card) => card.rank === 'J' && card.effect?.type === 'choice',
+						)
+
+					if (jackCard) {
+						const handLengthBefore =
+							actor.getSnapshot().context.players[0].hand.length
+						const drawPileBefore = actor.getSnapshot().context.drawPile
+
+						actor.send({type: 'CHOOSE_CARD', cardId: jackCard.id})
+
+						const targetRank = 'Q'
+						const targetExists = drawPileBefore.some(
+							(c) => c.rank === targetRank,
+						)
+
+						actor.send({type: 'SEARCH_AND_DRAW', rank: targetRank})
+
+						if (!targetExists) {
+							expect(actor.getSnapshot().context.players[0].hand.length).toBe(
+								handLengthBefore,
+							)
+						}
+
+						actor.send({type: 'PLAY_CARD'})
+
+						expect(actor.getSnapshot().context.discardPile[0].card).toEqual(
+							jackCard,
+						)
+					}
+				})
+			})
+		})
+
+		describe('Integration Tests', () => {
+			it('should complete a 2-player game with TO THE MAX winner (exact max threshold)', () => {
 				const actor = createActor(minOrMaxMachine)
 				actor.start()
 
+				expect(actor.getSnapshot().value).toBe('lobby')
+
 				actor.send({
 					type: 'PLAYER_JOINED',
-					playerId: 'player-1',
+					playerId: 'alice',
 					playerName: 'Alice',
 				})
 				actor.send({
 					type: 'PLAYER_JOINED',
-					playerId: 'player-2',
+					playerId: 'bob',
 					playerName: 'Bob',
 				})
-				actor.send({type: 'SEED', seed: 'bust-min-test'})
+				actor.send({type: 'SEED', seed: 'max-win-2p'})
 				actor.send({type: 'START_GAME'})
+
+				expect(actor.getSnapshot().value).toMatchObject({
+					setup: 'shufflingPile',
+				})
+				expect(actor.getSnapshot().context.players).toHaveLength(2)
+				expect(actor.getSnapshot().context.rng).not.toBe(null)
+
 				actor.send({type: 'PILE_SHUFFLED'})
+				expect(actor.getSnapshot().value).toMatchObject({setup: 'dealingCards'})
+
 				actor.send({type: 'CARDS_DEALT'})
+				expect(actor.getSnapshot().value).toMatchObject({
+					setup: 'generatingThresholds',
+				})
+				expect(actor.getSnapshot().context.players[0].hand).toHaveLength(3)
+				expect(actor.getSnapshot().context.players[1].hand).toHaveLength(3)
+
 				actor.send({type: 'THRESHOLDS_SET'})
+				expect(actor.getSnapshot().value).toMatchObject({
+					setup: 'spinningInitialWheel',
+				})
+				expect(actor.getSnapshot().context.maxThreshold).toBeGreaterThan(0)
 
-				const setupContext = actor.getSnapshot().context
-				const spinDegrees = calculateSpin(0.9, setupContext.rng)
-				const wheelAngle = setupContext.wheelAngle + spinDegrees
+				actor.send({type: 'WHEEL_SPUN', angle: 270})
+				expect(actor.getSnapshot().value).toMatchObject({
+					setup: 'playingFirstCard',
+				})
 
-				actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
 				actor.send({type: 'FIRST_CARD_PLAYED'})
+				expect(actor.getSnapshot().value).toMatchObject({
+					playing: {playerTurn: 'awaitingAction'},
+				})
+				expect(actor.getSnapshot().context.discardPile).toHaveLength(1)
 
 				for (let turn = 0; turn < 30; turn++) {
 					const snapshot = actor.getSnapshot()
-					if (snapshot.value === 'gameOver') {
-						if (snapshot.context.reason === 'exceeded_threshold') {
-							expect(snapshot.context.currentScore).toBeLessThan(
-								snapshot.context.minThreshold,
-							)
-							expect(snapshot.context.winner).not.toBe(null)
-							expect(snapshot.context.losers).toHaveLength(1)
-						}
-						break
-					}
+					if (snapshot.value === 'gameOver') break
 
 					const currentPlayerIndex = snapshot.context.currentPlayerIndex
 					const currentPlayer = snapshot.context.players[currentPlayerIndex]
@@ -1417,525 +1687,7 @@ describe('MinOrMax Machine Tests', () => {
 					if (playableCard.effect) {
 						actor.send({
 							type: 'ADD_EFFECT',
-							effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
-						})
-					}
-					actor.send({type: 'PLAY_CARD'})
-
-					if (actor.getSnapshot().value !== 'gameOver') {
-						actor.send({type: 'END_TURN'})
-					}
-				}
-			})
-		})
-
-		describe('story: complete game to victory', () => {
-			it('should play a realistic multi-turn game ending in a win', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-				transitionToPlaying(actor, 'victory-story-test')
-
-				expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
-				expect(actor.getSnapshot().context.players[0].hand).toHaveLength(4)
-
-				const playCard = () => {
-					const snapshot = actor.getSnapshot()
-					const currentPlayerIndex = snapshot.context.currentPlayerIndex
-					const currentPlayer = snapshot.context.players[currentPlayerIndex]
-					const topCard = snapshot.context.discardPile[0].card
-					const wheelAngle = snapshot.context.wheelAngle
-					const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-					const cardToPlay = findValidCard(
-						currentPlayer.hand,
-						topCard,
-						wheelMode,
-					)
-
-					if (cardToPlay) {
-						actor.send({type: 'CHOOSE_CARD', cardId: cardToPlay.id})
-						if (cardToPlay.effect) {
-							actor.send({
-								type: 'ADD_EFFECT',
-								effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
-							})
-						}
-						actor.send({type: 'PLAY_CARD'})
-						if (actor.getSnapshot().value !== 'gameOver') {
-							actor.send({type: 'END_TURN'})
-						}
-					}
-				}
-
-				for (let turn = 0; turn < 10; turn++) {
-					if (actor.getSnapshot().value === 'gameOver') {
-						break
-					}
-					playCard()
-				}
-
-				expect(actor.getSnapshot().context.players).toHaveLength(2)
-			})
-		})
-
-		describe('state serialization', () => {
-			it('should serialize and restore RNG state for deterministic gameplay', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-				transitionToPlaying(actor)
-
-				actor.send({type: 'WHEEL_SPUN', angle: 270})
-
-				const snapshot1 = actor.getSnapshot()
-				const rngData = snapshot1.context.rng!.toJSON()
-
-				const restoredRng = Rng.fromJSON(rngData)
-
-				const nextValuesOriginal = [
-					snapshot1.context.rng!.next(),
-					snapshot1.context.rng!.next(),
-					snapshot1.context.rng!.next(),
-				]
-
-				const nextValuesRestored = [
-					restoredRng.next(),
-					restoredRng.next(),
-					restoredRng.next(),
-				]
-
-				expect(nextValuesRestored).toEqual(nextValuesOriginal)
-				expect(restoredRng.seed).toBe(snapshot1.context.rng!.seed)
-				expect(restoredRng.callCount).toBe(snapshot1.context.rng!.callCount)
-			})
-		})
-
-		describe('surrender conditions', () => {
-			it('should transition to gameOver when player surrenders', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-				transitionToPlaying(actor)
-
-				expect(actor.getSnapshot().value).toMatchObject({
-					playing: {playerTurn: 'awaitingAction'},
-				})
-
-				actor.send({type: 'SURRENDER'})
-
-				expect(actor.getSnapshot().value).toBe('gameOver')
-				expect(actor.getSnapshot().context.winner?.id).toBe('player-2')
-				expect(actor.getSnapshot().context.losers).toHaveLength(1)
-				expect(actor.getSnapshot().context.losers[0].id).toBe('player-1')
-				expect(actor.getSnapshot().context.reason).toBe('surrendered')
-			})
-
-			it('should handle surrender with multiple players correctly', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-
-				actor.send({
-					type: 'PLAYER_JOINED',
-					playerId: 'player-1',
-					playerName: 'Alice',
-				})
-				actor.send({
-					type: 'PLAYER_JOINED',
-					playerId: 'player-2',
-					playerName: 'Bob',
-				})
-				actor.send({
-					type: 'PLAYER_JOINED',
-					playerId: 'player-3',
-					playerName: 'Charlie',
-				})
-				actor.send({type: 'SEED', seed: '3p-surrender-test'})
-				actor.send({type: 'START_GAME'})
-				actor.send({type: 'PILE_SHUFFLED'})
-				actor.send({type: 'CARDS_DEALT'})
-				actor.send({type: 'THRESHOLDS_SET'})
-				actor.send({type: 'WHEEL_SPUN', angle: 270})
-				actor.send({type: 'FIRST_CARD_PLAYED'})
-
-				const topCard = actor.getSnapshot().context.discardPile[0].card
-				const wheelAngle = actor.getSnapshot().context.wheelAngle
-				const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-				const hand = actor.getSnapshot().context.players[0].hand
-				const cardToPlay = findValidCard(hand, topCard, wheelMode)
-
-				if (cardToPlay) {
-					actor.send({type: 'CHOOSE_CARD', cardId: cardToPlay.id})
-					if (cardToPlay.rank === 'A') {
-						actor.send({
-							type: 'ADD_EFFECT',
-							effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
-						})
-					}
-					actor.send({type: 'PLAY_CARD'})
-					if (actor.getSnapshot().value !== 'gameOver') {
-						actor.send({type: 'END_TURN'})
-					}
-				}
-
-				if (actor.getSnapshot().value !== 'gameOver') {
-					actor.send({type: 'SURRENDER'})
-
-					expect(actor.getSnapshot().value).toBe('gameOver')
-					expect(actor.getSnapshot().context.winner?.id).toBe('player-1')
-					expect(actor.getSnapshot().context.losers).toHaveLength(2)
-				}
-				expect(
-					actor
-						.getSnapshot()
-						.context.losers.map((p) => p.id)
-						.sort(),
-				).toEqual(['player-2', 'player-3'])
-				expect(actor.getSnapshot().context.reason).toBe('surrendered')
-			})
-
-			it('should handle surrender when first player (index 0) surrenders', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-				transitionToPlaying(actor)
-
-				actor.send({type: 'SURRENDER'})
-
-				expect(actor.getSnapshot().value).toBe('gameOver')
-				expect(actor.getSnapshot().context.winner?.id).toBe('player-2')
-				expect(actor.getSnapshot().context.losers[0].id).toBe('player-1')
-				expect(actor.getSnapshot().context.reason).toBe('surrendered')
-			})
-		})
-
-		describe('card effects', () => {
-			it('should play small Ace (value 1) by adding zero-value effect', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-				transitionToPlaying(actor, 'ace-small-test')
-
-				const aceCard = actor
-					.getSnapshot()
-					.context.players[0].hand.find((card) => card.rank === 'A')
-
-				if (aceCard) {
-					const scoreBefore = actor.getSnapshot().context.currentScore
-
-					actor.send({type: 'CHOOSE_CARD', cardId: aceCard.id})
-
-					expect(actor.getSnapshot().value).toMatchObject({
-						playing: {playerTurn: 'configuringEffect'},
-					})
-
-					actor.send({
-						type: 'ADD_EFFECT',
-						effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
-					})
-
-					expect(actor.getSnapshot().context.activeEffects).toEqual([
-						{type: 'value-adder', value: 0, stacksRemaining: 1},
-					])
-
-					actor.send({type: 'PLAY_CARD'})
-
-					const wheelAngle = actor.getSnapshot().context.wheelAngle
-					const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-					const expectedScore =
-						wheelMode === 'max' ? scoreBefore + 1 : scoreBefore - 1
-
-					expect(actor.getSnapshot().context.currentScore).toBe(expectedScore)
-					expect(actor.getSnapshot().context.activeEffects).toEqual([])
-					expect(actor.getSnapshot().context.discardPile[0].playedValue).toBe(
-						wheelMode === 'max' ? 1 : -1,
-					)
-				}
-			})
-
-			it('should play big Ace (value 11) by adding ten-value effect', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-				transitionToPlaying(actor, 'ace-big-test')
-
-				const aceCard = actor
-					.getSnapshot()
-					.context.players[0].hand.find((card) => card.rank === 'A')
-
-				if (aceCard) {
-					const scoreBefore = actor.getSnapshot().context.currentScore
-
-					actor.send({type: 'CHOOSE_CARD', cardId: aceCard.id})
-					actor.send({
-						type: 'ADD_EFFECT',
-						effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
-					})
-
-					actor.send({type: 'PLAY_CARD'})
-
-					const wheelAngle = actor.getSnapshot().context.wheelAngle
-					const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-					const expectedScore =
-						wheelMode === 'max' ? scoreBefore + 11 : scoreBefore - 11
-
-					expect(actor.getSnapshot().context.currentScore).toBe(expectedScore)
-					expect(actor.getSnapshot().context.activeEffects).toEqual([])
-					expect(actor.getSnapshot().context.discardPile[0].playedValue).toBe(
-						wheelMode === 'max' ? 11 : -11,
-					)
-				}
-			})
-
-			it('should find and draw Jack target card when it exists in draw pile', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-				transitionToPlaying(actor, 'jack-courtship-test')
-
-				const jackCard = actor
-					.getSnapshot()
-					.context.players[0].hand.find(
-						(card) => card.rank === 'J' && card.effect?.type === 'choice',
-					)
-
-				if (jackCard) {
-					const handLengthBefore =
-						actor.getSnapshot().context.players[0].hand.length
-					const drawPileBefore = actor.getSnapshot().context.drawPile
-
-					actor.send({type: 'CHOOSE_CARD', cardId: jackCard.id})
-
-					expect(actor.getSnapshot().value).toMatchObject({
-						playing: {playerTurn: 'configuringEffect'},
-					})
-
-					const targetRank = 'Q'
-					const targetExists = drawPileBefore.some((c) => c.rank === targetRank)
-
-					actor.send({type: 'SEARCH_AND_DRAW', rank: targetRank})
-
-					if (targetExists) {
-						const handAfterDraw = actor.getSnapshot().context.players[0].hand
-						expect(handAfterDraw.length).toBeGreaterThan(handLengthBefore)
-						expect(handAfterDraw.some((c) => c.rank === targetRank)).toBe(true)
-					}
-
-					actor.send({type: 'PLAY_CARD'})
-
-					expect(actor.getSnapshot().context.discardPile[0].card).toEqual(
-						jackCard,
-					)
-				}
-			})
-
-			it('should handle Jack effect gracefully when target card not found', () => {
-				const actor = createActor(minOrMaxMachine)
-				actor.start()
-				transitionToPlaying(actor, 'jack-no-target-test')
-
-				const jackCard = actor
-					.getSnapshot()
-					.context.players[0].hand.find(
-						(card) => card.rank === 'J' && card.effect?.type === 'choice',
-					)
-
-				if (jackCard) {
-					const handLengthBefore =
-						actor.getSnapshot().context.players[0].hand.length
-					const drawPileBefore = actor.getSnapshot().context.drawPile
-
-					actor.send({type: 'CHOOSE_CARD', cardId: jackCard.id})
-
-					const targetRank = 'Q'
-					const targetExists = drawPileBefore.some((c) => c.rank === targetRank)
-
-					actor.send({type: 'SEARCH_AND_DRAW', rank: targetRank})
-
-					if (!targetExists) {
-						expect(actor.getSnapshot().context.players[0].hand.length).toBe(
-							handLengthBefore,
-						)
-					}
-
-					actor.send({type: 'PLAY_CARD'})
-
-					expect(actor.getSnapshot().context.discardPile[0].card).toEqual(
-						jackCard,
-					)
-				}
-			})
-		})
-	})
-
-	describe('Integration Tests', () => {
-		it('should complete a 2-player game with TO THE MAX winner (exact max threshold)', () => {
-			const actor = createActor(minOrMaxMachine)
-			actor.start()
-
-			expect(actor.getSnapshot().value).toBe('lobby')
-
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'alice',
-				playerName: 'Alice',
-			})
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'bob',
-				playerName: 'Bob',
-			})
-			actor.send({type: 'SEED', seed: 'max-win-2p'})
-			actor.send({type: 'START_GAME'})
-
-			expect(actor.getSnapshot().value).toMatchObject({setup: 'shufflingPile'})
-			expect(actor.getSnapshot().context.players).toHaveLength(2)
-			expect(actor.getSnapshot().context.rng).not.toBe(null)
-
-			actor.send({type: 'PILE_SHUFFLED'})
-			expect(actor.getSnapshot().value).toMatchObject({setup: 'dealingCards'})
-
-			actor.send({type: 'CARDS_DEALT'})
-			expect(actor.getSnapshot().value).toMatchObject({
-				setup: 'generatingThresholds',
-			})
-			expect(actor.getSnapshot().context.players[0].hand).toHaveLength(3)
-			expect(actor.getSnapshot().context.players[1].hand).toHaveLength(3)
-
-			actor.send({type: 'THRESHOLDS_SET'})
-			expect(actor.getSnapshot().value).toMatchObject({
-				setup: 'spinningInitialWheel',
-			})
-			expect(actor.getSnapshot().context.minThreshold).toBeLessThan(0)
-			expect(actor.getSnapshot().context.maxThreshold).toBeGreaterThan(0)
-
-			actor.send({type: 'WHEEL_SPUN', angle: 270})
-			expect(actor.getSnapshot().value).toMatchObject({
-				setup: 'playingFirstCard',
-			})
-
-			actor.send({type: 'FIRST_CARD_PLAYED'})
-			expect(actor.getSnapshot().value).toMatchObject({
-				playing: {playerTurn: 'awaitingAction'},
-			})
-			expect(actor.getSnapshot().context.discardPile).toHaveLength(1)
-
-			for (let turn = 0; turn < 30; turn++) {
-				const snapshot = actor.getSnapshot()
-				if (snapshot.value === 'gameOver') break
-
-				const currentPlayerIndex = snapshot.context.currentPlayerIndex
-				const currentPlayer = snapshot.context.players[currentPlayerIndex]
-				const playableCard = currentPlayer.hand.find((card) => {
-					const topCard = snapshot.context.discardPile[0]
-					if (!topCard) return true
-					if (card.rank === 'A' || topCard.card.rank === 'A') return true
-					const wheelAngle = snapshot.context.wheelAngle
-					const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-					const cardValue = getCardValue(card.rank)
-					const topValue = getCardValue(topCard.card.rank)
-					if (wheelMode === 'max') {
-						return cardValue >= topValue
-					} else {
-						return cardValue <= topValue
-					}
-				})
-
-				if (!playableCard) break
-
-				actor.send({type: 'CHOOSE_CARD', cardId: playableCard.id})
-				if (playableCard.effect) {
-					actor.send({
-						type: 'ADD_EFFECT',
-						effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
-					})
-				}
-				actor.send({type: 'PLAY_CARD'})
-
-				if (actor.getSnapshot().value === 'gameOver') {
-					break
-				}
-
-				actor.send({type: 'END_TURN'})
-			}
-
-			const finalSnapshot = actor.getSnapshot()
-			const finalContext = finalSnapshot.context
-
-			if (finalSnapshot.value === 'gameOver') {
-				expect(finalContext.winner).not.toBe(null)
-				expect(finalContext.losers).toHaveLength(1)
-				if (finalContext.reason === 'exact_threshold') {
-					const isMaxWin =
-						finalContext.currentScore === finalContext.maxThreshold
-					const isMinWin =
-						finalContext.currentScore === finalContext.minThreshold
-					expect(isMaxWin || isMinWin).toBe(true)
-				}
-			}
-
-			expect(finalContext.players).toHaveLength(2)
-			expect(finalContext.currentScore).not.toBe(0)
-		})
-
-		it('should complete a 3-player game with "to the min" winner (exact min threshold)', () => {
-			const actor = createActor(minOrMaxMachine)
-			actor.start()
-
-			expect(actor.getSnapshot().value).toBe('lobby')
-
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'alice',
-				playerName: 'Alice',
-			})
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'bob',
-				playerName: 'Bob',
-			})
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'charlie',
-				playerName: 'Charlie',
-			})
-			actor.send({type: 'SEED', seed: 'min-win-3p'})
-			actor.send({type: 'START_GAME'})
-
-			expect(actor.getSnapshot().value).toMatchObject({setup: 'shufflingPile'})
-			expect(actor.getSnapshot().context.players).toHaveLength(3)
-
-			actor.send({type: 'PILE_SHUFFLED'})
-			actor.send({type: 'CARDS_DEALT'})
-			expect(actor.getSnapshot().context.players[0].hand).toHaveLength(3)
-			expect(actor.getSnapshot().context.players[1].hand).toHaveLength(3)
-			expect(actor.getSnapshot().context.players[2].hand).toHaveLength(3)
-
-			actor.send({type: 'THRESHOLDS_SET'})
-			actor.send({type: 'WHEEL_SPUN', angle: 270})
-			actor.send({type: 'FIRST_CARD_PLAYED'})
-
-			expect(actor.getSnapshot().value).toMatchObject({
-				playing: {playerTurn: 'awaitingAction'},
-			})
-
-			const beforeContext = actor.getSnapshot().context
-			const spinDegrees = calculateSpin(0.9, beforeContext.rng)
-			const newAngle = beforeContext.wheelAngle + spinDegrees
-
-			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
-
-			const wheelAngle = actor.getSnapshot().context.wheelAngle
-			const isMin = wheelAngle >= 180 && wheelAngle < 360
-
-			if (isMin) {
-				for (let turn = 0; turn < 30; turn++) {
-					const snapshot = actor.getSnapshot()
-					if (snapshot.value === 'gameOver') break
-
-					const currentPlayerIndex = snapshot.context.currentPlayerIndex
-					const currentPlayer = snapshot.context.players[currentPlayerIndex]
-					const playableCard = currentPlayer.hand[0]
-
-					if (!playableCard) break
-
-					actor.send({type: 'CHOOSE_CARD', cardId: playableCard.id})
-					if (playableCard.effect) {
-						actor.send({
-							type: 'ADD_EFFECT',
-							effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
+							effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
 						})
 					}
 					actor.send({type: 'PLAY_CARD'})
@@ -1947,180 +1699,60 @@ describe('MinOrMax Machine Tests', () => {
 					actor.send({type: 'END_TURN'})
 				}
 
-				if (actor.getSnapshot().value === 'gameOver') {
-					const finalContext = actor.getSnapshot().context
+				const finalSnapshot = actor.getSnapshot()
+				const finalContext = finalSnapshot.context
+
+				if (finalSnapshot.value === 'gameOver') {
 					expect(finalContext.winner).not.toBe(null)
-					expect(finalContext.losers).toHaveLength(2)
-					expect(finalContext.reason).toBe('exact_threshold')
-					expect(finalContext.currentScore).toBe(finalContext.minThreshold)
-				}
-			}
-
-			expect(actor.getSnapshot().context.players).toHaveLength(3)
-		})
-
-		it('should complete a 2-player game with threshold busted (previous player wins)', () => {
-			const actor = createActor(minOrMaxMachine)
-			actor.start()
-
-			expect(actor.getSnapshot().value).toBe('lobby')
-
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'alice',
-				playerName: 'Alice',
-			})
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'bob',
-				playerName: 'Bob',
-			})
-			actor.send({type: 'SEED', seed: 'threshold-bust-2p'})
-			actor.send({type: 'START_GAME'})
-
-			expect(actor.getSnapshot().value).toMatchObject({setup: 'shufflingPile'})
-
-			actor.send({type: 'PILE_SHUFFLED'})
-			actor.send({type: 'CARDS_DEALT'})
-			actor.send({type: 'THRESHOLDS_SET'})
-
-			const setupContext = actor.getSnapshot().context
-			const spinDegrees = calculateSpin(0.3, setupContext.rng)
-			const wheelAngle = setupContext.wheelAngle + spinDegrees
-
-			actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
-			actor.send({type: 'FIRST_CARD_PLAYED'})
-
-			expect(actor.getSnapshot().value).toMatchObject({
-				playing: {playerTurn: 'awaitingAction'},
-			})
-
-			for (let turn = 0; turn < 30; turn++) {
-				const snapshot = actor.getSnapshot()
-				if (snapshot.value === 'gameOver') break
-
-				const currentPlayerIndex = snapshot.context.currentPlayerIndex
-				const currentPlayer = snapshot.context.players[currentPlayerIndex]
-				const playableCard = currentPlayer.hand.find((card) => {
-					const topCard = snapshot.context.discardPile[0]
-					if (!topCard) return true
-					if (card.rank === 'A' || topCard.card.rank === 'A') return true
-					const wheelAngle = snapshot.context.wheelAngle
-					const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-					const cardValue = getCardValue(card.rank)
-					const topValue = getCardValue(topCard.card.rank)
-					if (wheelMode === 'max') {
-						return cardValue >= topValue
-					} else {
-						return cardValue <= topValue
+					expect(finalContext.losers).toHaveLength(1)
+					if (finalContext.reason === 'exact_threshold') {
+						expect(finalContext.tally).toBe(finalContext.maxThreshold)
 					}
+				}
+
+				expect(finalContext.players).toHaveLength(2)
+				expect(finalContext.tally).toBeGreaterThan(0)
+			})
+
+			it('should complete a 2-player game with threshold busted (previous player wins)', () => {
+				const actor = createActor(minOrMaxMachine)
+				actor.start()
+
+				expect(actor.getSnapshot().value).toBe('lobby')
+
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'alice',
+					playerName: 'Alice',
+				})
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'bob',
+					playerName: 'Bob',
+				})
+				actor.send({type: 'SEED', seed: 'threshold-bust-2p'})
+				actor.send({type: 'START_GAME'})
+
+				expect(actor.getSnapshot().value).toMatchObject({
+					setup: 'shufflingPile',
 				})
 
-				if (!playableCard) break
+				actor.send({type: 'PILE_SHUFFLED'})
+				actor.send({type: 'CARDS_DEALT'})
+				actor.send({type: 'THRESHOLDS_SET'})
 
-				actor.send({type: 'CHOOSE_CARD', cardId: playableCard.id})
-				if (playableCard.effect) {
-					actor.send({
-						type: 'ADD_EFFECT',
-						effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
-					})
-				}
-				actor.send({type: 'PLAY_CARD'})
+				const setupContext = actor.getSnapshot().context
+				const spinDegrees = calculateSpin(0.3, setupContext.rng)
+				const wheelAngle = setupContext.wheelAngle + spinDegrees
 
-				if (actor.getSnapshot().value === 'gameOver') {
-					break
-				}
+				actor.send({type: 'WHEEL_SPUN', angle: wheelAngle})
+				actor.send({type: 'FIRST_CARD_PLAYED'})
 
-				actor.send({type: 'END_TURN'})
-			}
+				expect(actor.getSnapshot().value).toMatchObject({
+					playing: {playerTurn: 'awaitingAction'},
+				})
 
-			const finalSnapshot = actor.getSnapshot()
-			const finalContext = finalSnapshot.context
-
-			if (finalSnapshot.value === 'gameOver') {
-				expect(finalContext.winner).not.toBe(null)
-				expect(finalContext.losers).toHaveLength(1)
-				expect(finalContext.reason).toBe('exceeded_threshold')
-
-				const isMaxBust = finalContext.currentScore > finalContext.maxThreshold
-				const isMinBust = finalContext.currentScore < finalContext.minThreshold
-				expect(isMaxBust || isMinBust).toBe(true)
-
-				const loserIndex = finalContext.players.findIndex(
-					(p) => p.id === finalContext.losers[0].id,
-				)
-				const winnerIndex = finalContext.players.findIndex(
-					(p) => p.id === finalContext.winner?.id,
-				)
-				expect(winnerIndex).toBe((loserIndex - 1 + 2) % 2)
-			}
-
-			expect(finalContext.players).toHaveLength(2)
-		})
-
-		it('should complete a 4-player game with min threshold busted (previous player wins)', () => {
-			const actor = createActor(minOrMaxMachine)
-			actor.start()
-
-			expect(actor.getSnapshot().value).toBe('lobby')
-
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'alice',
-				playerName: 'Alice',
-			})
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'bob',
-				playerName: 'Bob',
-			})
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'charlie',
-				playerName: 'Charlie',
-			})
-			actor.send({
-				type: 'PLAYER_JOINED',
-				playerId: 'diana',
-				playerName: 'Diana',
-			})
-			actor.send({type: 'SEED', seed: 'min-bust-4p'})
-			actor.send({type: 'START_GAME'})
-
-			expect(actor.getSnapshot().value).toMatchObject({setup: 'shufflingPile'})
-			expect(actor.getSnapshot().context.players).toHaveLength(4)
-
-			actor.send({type: 'PILE_SHUFFLED'})
-			actor.send({type: 'CARDS_DEALT'})
-			expect(actor.getSnapshot().context.players[0].hand).toHaveLength(3)
-			expect(actor.getSnapshot().context.players[1].hand).toHaveLength(3)
-			expect(actor.getSnapshot().context.players[2].hand).toHaveLength(3)
-			expect(actor.getSnapshot().context.players[3].hand).toHaveLength(3)
-
-			actor.send({type: 'THRESHOLDS_SET'})
-
-			const setupContext = actor.getSnapshot().context
-			const setupSpinDegrees = calculateSpin(0.95, setupContext.rng)
-			const setupWheelAngle = setupContext.wheelAngle + setupSpinDegrees
-
-			actor.send({type: 'WHEEL_SPUN', angle: setupWheelAngle})
-			actor.send({type: 'FIRST_CARD_PLAYED'})
-
-			expect(actor.getSnapshot().value).toMatchObject({
-				playing: {playerTurn: 'awaitingAction'},
-			})
-
-			const beforeContext = actor.getSnapshot().context
-			const spinDegrees = calculateSpin(0.9, beforeContext.rng)
-			const newAngle = beforeContext.wheelAngle + spinDegrees
-
-			actor.send({type: 'WHEEL_SPUN', angle: newAngle})
-
-			const wheelAngle = actor.getSnapshot().context.wheelAngle
-			const isMin = wheelAngle >= 180 && wheelAngle < 360
-
-			if (isMin) {
-				for (let turn = 0; turn < 40; turn++) {
+				for (let turn = 0; turn < 30; turn++) {
 					const snapshot = actor.getSnapshot()
 					if (snapshot.value === 'gameOver') break
 
@@ -2130,8 +1762,8 @@ describe('MinOrMax Machine Tests', () => {
 						const topCard = snapshot.context.discardPile[0]
 						if (!topCard) return true
 						if (card.rank === 'A' || topCard.card.rank === 'A') return true
-						const currentWheelAngle = snapshot.context.wheelAngle
-						const wheelMode = currentWheelAngle >= 180 ? 'min' : 'max'
+						const wheelAngle = snapshot.context.wheelAngle
+						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
 						const cardValue = getCardValue(card.rank)
 						const topValue = getCardValue(topCard.card.rank)
 						if (wheelMode === 'max') {
@@ -2147,7 +1779,7 @@ describe('MinOrMax Machine Tests', () => {
 					if (playableCard.effect) {
 						actor.send({
 							type: 'ADD_EFFECT',
-							effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
+							effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
 						})
 					}
 					actor.send({type: 'PLAY_CARD'})
@@ -2159,23 +1791,149 @@ describe('MinOrMax Machine Tests', () => {
 					actor.send({type: 'END_TURN'})
 				}
 
-				if (actor.getSnapshot().value === 'gameOver') {
-					const finalContext = actor.getSnapshot().context
-					expect(finalContext.winner).not.toBe(null)
-					expect(finalContext.losers).toHaveLength(3)
-					expect(finalContext.reason).toBe('exceeded_threshold')
-					expect(finalContext.currentScore).toBeLessThan(
-						finalContext.minThreshold,
-					)
+				const finalSnapshot = actor.getSnapshot()
+				const finalContext = finalSnapshot.context
 
+				if (finalSnapshot.value === 'gameOver') {
+					expect(finalContext.winner).not.toBe(null)
+					expect(finalContext.losers).toHaveLength(1)
+					expect(finalContext.reason).toBe('exceeded_threshold')
+
+					expect(finalContext.tally).toBeGreaterThan(finalContext.maxThreshold)
+
+					const loserIndex = finalContext.players.findIndex(
+						(p) => p.id === finalContext.losers[0].id,
+					)
 					const winnerIndex = finalContext.players.findIndex(
 						(p) => p.id === finalContext.winner?.id,
 					)
-					expect(winnerIndex).toBeGreaterThanOrEqual(0)
+					expect(winnerIndex).toBe((loserIndex - 1 + 2) % 2)
 				}
-			}
 
-			expect(actor.getSnapshot().context.players).toHaveLength(4)
+				expect(finalContext.players).toHaveLength(2)
+			})
+
+			it('should complete a 4-player game with min threshold busted (previous player wins)', () => {
+				const actor = createActor(minOrMaxMachine)
+				actor.start()
+
+				expect(actor.getSnapshot().value).toBe('lobby')
+
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'alice',
+					playerName: 'Alice',
+				})
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'bob',
+					playerName: 'Bob',
+				})
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'charlie',
+					playerName: 'Charlie',
+				})
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'diana',
+					playerName: 'Diana',
+				})
+				actor.send({type: 'SEED', seed: 'min-bust-4p'})
+				actor.send({type: 'START_GAME'})
+
+				expect(actor.getSnapshot().value).toMatchObject({
+					setup: 'shufflingPile',
+				})
+				expect(actor.getSnapshot().context.players).toHaveLength(4)
+
+				actor.send({type: 'PILE_SHUFFLED'})
+				actor.send({type: 'CARDS_DEALT'})
+				expect(actor.getSnapshot().context.players[0].hand).toHaveLength(3)
+				expect(actor.getSnapshot().context.players[1].hand).toHaveLength(3)
+				expect(actor.getSnapshot().context.players[2].hand).toHaveLength(3)
+				expect(actor.getSnapshot().context.players[3].hand).toHaveLength(3)
+
+				actor.send({type: 'THRESHOLDS_SET'})
+
+				const setupContext = actor.getSnapshot().context
+				const setupSpinDegrees = calculateSpin(0.95, setupContext.rng)
+				const setupWheelAngle = setupContext.wheelAngle + setupSpinDegrees
+
+				actor.send({type: 'WHEEL_SPUN', angle: setupWheelAngle})
+				actor.send({type: 'FIRST_CARD_PLAYED'})
+
+				expect(actor.getSnapshot().value).toMatchObject({
+					playing: {playerTurn: 'awaitingAction'},
+				})
+
+				const beforeContext = actor.getSnapshot().context
+				const spinDegrees = calculateSpin(0.9, beforeContext.rng)
+				const newAngle = beforeContext.wheelAngle + spinDegrees
+
+				actor.send({type: 'WHEEL_SPUN', angle: newAngle})
+
+				const wheelAngle = actor.getSnapshot().context.wheelAngle
+				const isMin = wheelAngle >= 180 && wheelAngle < 360
+
+				if (isMin) {
+					for (let turn = 0; turn < 40; turn++) {
+						const snapshot = actor.getSnapshot()
+						if (snapshot.value === 'gameOver') break
+
+						const currentPlayerIndex = snapshot.context.currentPlayerIndex
+						const currentPlayer = snapshot.context.players[currentPlayerIndex]
+						const playableCard = currentPlayer.hand.find((card) => {
+							const topCard = snapshot.context.discardPile[0]
+							if (!topCard) return true
+							if (card.rank === 'A' || topCard.card.rank === 'A') return true
+							const currentWheelAngle = snapshot.context.wheelAngle
+							const wheelMode = currentWheelAngle >= 180 ? 'min' : 'max'
+							const cardValue = getCardValue(card.rank)
+							const topValue = getCardValue(topCard.card.rank)
+							if (wheelMode === 'max') {
+								return cardValue >= topValue
+							} else {
+								return cardValue <= topValue
+							}
+						})
+
+						if (!playableCard) break
+
+						actor.send({type: 'CHOOSE_CARD', cardId: playableCard.id})
+						if (playableCard.effect) {
+							actor.send({
+								type: 'ADD_EFFECT',
+								effect: {type: 'value-adder', value: 0, stacksRemaining: 1},
+							})
+						}
+						actor.send({type: 'PLAY_CARD'})
+
+						if (actor.getSnapshot().value === 'gameOver') {
+							break
+						}
+
+						actor.send({type: 'END_TURN'})
+					}
+
+					if (actor.getSnapshot().value === 'gameOver') {
+						const finalContext = actor.getSnapshot().context
+						expect(finalContext.winner).not.toBe(null)
+						expect(finalContext.losers).toHaveLength(3)
+						expect(finalContext.reason).toBe('exceeded_threshold')
+						expect(finalContext.tally).toBeGreaterThan(
+							finalContext.maxThreshold,
+						)
+
+						const winnerIndex = finalContext.players.findIndex(
+							(p) => p.id === finalContext.winner?.id,
+						)
+						expect(winnerIndex).toBeGreaterThanOrEqual(0)
+					}
+				}
+
+				expect(actor.getSnapshot().context.players).toHaveLength(4)
+			})
 		})
 	})
 })

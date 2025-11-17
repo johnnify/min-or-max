@@ -35,7 +35,10 @@ export const canPlayerSendEvent = (
 		const currentPlayer = context.players[context.currentPlayerIndex]
 
 		if (!currentPlayer) {
-			return {allowed: false, reason: 'Invalid game state: current player not found'}
+			return {
+				allowed: false,
+				reason: 'Invalid game state: current player not found',
+			}
 		}
 
 		if (currentPlayer.id !== playerId) {

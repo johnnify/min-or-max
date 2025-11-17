@@ -6,7 +6,6 @@ import {
 	getCardValue,
 	calculateCurrentPlayerWins,
 	calculatePreviousPlayerWins,
-	getModeFromWheelAngle,
 	canCardBeatTopCard,
 } from './utils'
 
@@ -21,8 +20,7 @@ export type MinOrMaxContext = {
 	// Setup & Playing data
 	drawPile: Card[]
 	discardPile: PlayedCard[]
-	currentScore: number
-	minThreshold: number
+	tally: number
 	maxThreshold: number
 	wheelAngle: number
 	currentPlayerIndex: number
@@ -116,8 +114,7 @@ export const minOrMaxMachine = setup({
 			}
 		}),
 		generateThresholds: assign({
-			minThreshold: ({context}) => context.rng.nextInt(-20, -10),
-			maxThreshold: ({context}) => context.rng.nextInt(30, 50),
+			maxThreshold: ({context}) => context.rng.nextInt(40, 60),
 		}),
 		playFirstCard: assign(({context}) => {
 			const card = context.drawPile[0]
@@ -127,8 +124,7 @@ export const minOrMaxMachine = setup({
 			newDrawPile.shift()
 
 			const cardValue = getCardValue(card.rank)
-			const wheelMode = getModeFromWheelAngle(context.wheelAngle)
-			const playedValue = wheelMode === 'max' ? cardValue : -cardValue
+			const playedValue = cardValue
 
 			const playedCard: PlayedCard = {
 				card,
@@ -139,7 +135,7 @@ export const minOrMaxMachine = setup({
 			return {
 				drawPile: newDrawPile,
 				discardPile: [playedCard],
-				currentScore: context.currentScore + playedValue,
+				tally: context.tally + playedValue,
 				hasSpunThisTurn: false,
 			}
 		}),
@@ -264,8 +260,7 @@ export const minOrMaxMachine = setup({
 				}
 			}
 
-			const wheelMode = getModeFromWheelAngle(context.wheelAngle)
-			const playedValue = wheelMode === 'max' ? cardValue : -cardValue
+			const playedValue = cardValue
 
 			const playedCard: PlayedCard = {
 				card: chosenCard,
@@ -278,7 +273,7 @@ export const minOrMaxMachine = setup({
 			return {
 				players: updatedPlayers,
 				discardPile: newDiscardPile,
-				currentScore: context.currentScore + playedValue,
+				tally: context.tally + playedValue,
 				activeEffects: newActiveEffects,
 			}
 		}),
@@ -289,12 +284,8 @@ export const minOrMaxMachine = setup({
 			chosenCard: null,
 		}),
 		setWinnerAndLosers: assign(({context}) => {
-			const isExact =
-				context.currentScore === context.minThreshold ||
-				context.currentScore === context.maxThreshold
-			const isOver =
-				context.currentScore < context.minThreshold ||
-				context.currentScore > context.maxThreshold
+			const isExact = context.tally === context.maxThreshold
+			const isOver = context.tally > context.maxThreshold
 
 			if (isExact) {
 				return {
@@ -326,8 +317,7 @@ export const minOrMaxMachine = setup({
 		resetToLobby: assign({
 			drawPile: [],
 			discardPile: [],
-			currentScore: 0,
-			minThreshold: 0,
+			tally: 0,
 			maxThreshold: 0,
 			wheelAngle: 90,
 			currentPlayerIndex: 0,
@@ -365,16 +355,10 @@ export const minOrMaxMachine = setup({
 		},
 		hasNotSpunThisTurn: ({context}) => !context.hasSpunThisTurn,
 		isExactThreshold: ({context}) => {
-			return (
-				context.currentScore === context.minThreshold ||
-				context.currentScore === context.maxThreshold
-			)
+			return context.tally === context.maxThreshold
 		},
 		isOverThreshold: ({context}) => {
-			return (
-				context.currentScore < context.minThreshold ||
-				context.currentScore > context.maxThreshold
-			)
+			return context.tally > context.maxThreshold
 		},
 	},
 }).createMachine({
@@ -388,8 +372,7 @@ export const minOrMaxMachine = setup({
 		rng: new Rng(Date.now().toString()),
 		drawPile: [],
 		discardPile: [],
-		currentScore: 0,
-		minThreshold: 0,
+		tally: 0,
 		maxThreshold: 0,
 		wheelAngle: 90,
 		currentPlayerIndex: 0,

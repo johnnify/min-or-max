@@ -30,6 +30,7 @@
 	import GameCard from '$lib/components/Game/GameCard/GameCard.svelte'
 	import Lobby from './Lobby.svelte'
 	import DiscardPile from './DiscardPile.svelte'
+	import Scoreboard from './Scoreboard.svelte'
 
 	type Props = {
 		roomId: string
@@ -197,7 +198,8 @@
 			if (
 				typeof playingState === 'object' &&
 				'playerTurn' in playingState &&
-				playingState.playerTurn === 'postCardPlay'
+				playingState.playerTurn !== 'processingCard' &&
+				playingState.playerTurn !== 'configuringEffect'
 			) {
 				return true
 			}
@@ -237,20 +239,7 @@
 	<div>Game over! TODO: Who won?!</div>
 {:else}
 	<div class="space-y-4">
-		<aside class="grid grid-cols-12 gap-4 font-mono text-sm">
-			<div class="col-span-3">
-				<span>Min:</span>
-				{gameState.minThreshold}
-			</div>
-			<div class="col-span-6 text-center text-2xl">
-				<span class="text-sm">Tally:</span>
-				{gameState.currentScore}
-			</div>
-			<div class="col-span-3 text-right">
-				<span>Max:</span>
-				{gameState.maxThreshold}
-			</div>
-		</aside>
+		<Scoreboard tally={gameState.tally} maxThreshold={gameState.maxThreshold} />
 
 		<section class="grid gap-8 py-8">
 			<ol>
@@ -276,7 +265,7 @@
 					disabled={!canSpinWheel}
 					onclick={() => {
 						// TODO: Calculate force based on how long button is held
-						sendMessage({type: 'REQUEST_WHEEL_SPIN', force: 0.5})
+						sendMessage({type: 'REQUEST_WHEEL_SPIN', force: 0.55})
 					}}
 				/>
 

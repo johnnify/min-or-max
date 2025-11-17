@@ -52,8 +52,8 @@ test('multiplayer game lobby and start', async ({browser}) => {
 	const startButton = page1.getByRole('button', {name: 'start'})
 	await startButton.click()
 
-	await expect(page1.getByText('Tally')).toBeVisible()
-	await expect(page2.getByText('Tally')).toBeVisible()
+	await expect(page1.getByRole('complementary', {name: 'tally'})).toBeVisible()
+	await expect(page2.getByRole('complementary', {name: 'tally'})).toBeVisible()
 
 	// can see the top discard card
 	const discardPileRegion1 = page1.getByRole('list', {name: 'Discard Pile'})
