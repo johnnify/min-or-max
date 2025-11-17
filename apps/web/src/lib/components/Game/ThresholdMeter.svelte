@@ -33,7 +33,7 @@
 	class="bg-primary/5 border-border relative h-full w-6 overflow-hidden rounded-full border"
 >
 	<div
-		class="absolute bottom-0 w-full rounded-full transition-all duration-1000 ease-in-out {color}"
+		class="absolute top-0 w-full rounded-full transition-all duration-1000 ease-in-out {color}"
 		style="height: {usedPercentage}%"
 	>
 		<span class="sr-only" id={labelId}

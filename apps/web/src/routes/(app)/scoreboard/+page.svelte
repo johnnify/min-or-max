@@ -1,10 +1,10 @@
 <script lang="ts">
+	import {onMount} from 'svelte'
+	import {Rng} from '@repo/rng'
 	import Scoreboard from '$lib/components/Game/Scoreboard.svelte'
 	import Lead from '$lib/components/typography/Lead.svelte'
 	import PageTitle from '$lib/components/typography/PageTitle.svelte'
 	import SectionTitle from '$lib/components/typography/SectionTitle.svelte'
-	import {Rng} from '@repo/rng'
-	import {onMount} from 'svelte'
 
 	const rng = new Rng(Date.now().toString())
 
