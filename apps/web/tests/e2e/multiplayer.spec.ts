@@ -98,3 +98,76 @@ test('multiplayer game lobby and start', async ({browser}) => {
 	await context1.close()
 	await context2.close()
 })
+
+test('room can be re-used after all players disconnect', async ({browser}) => {
+	test.slow()
+
+	const roomId = `reusable-room-${Date.now()}`
+
+	// First game session
+	const context1 = await browser.newContext()
+	const page1 = await context1.newPage()
+	await page1.goto(`/play/${roomId}?seed=first-session`)
+	await expect(page1.getByTestId('hydrated')).toBeVisible()
+
+	const connectedPlayersRegion1 = page1.getByRole('region', {
+		name: 'Connected players',
+	})
+	await expect(connectedPlayersRegion1).toBeVisible()
+	await expect(
+		connectedPlayersRegion1.getByRole('listitem').first(),
+	).toHaveText('Anonymous (you!)')
+
+	const context2 = await browser.newContext()
+	const page2 = await context2.newPage()
+	await page2.goto(`/play/${roomId}`)
+	await expect(page2.getByTestId('hydrated')).toBeVisible()
+
+	await expect(connectedPlayersRegion1.getByRole('listitem')).toHaveCount(2)
+
+	await page1.getByRole('button', {name: 'start'}).click()
+	await expect(page1.getByRole('complementary', {name: 'tally'})).toBeVisible()
+
+	// Close both contexts to simulate all players disconnecting
+	await context1.close()
+	await context2.close()
+
+	// Small delay to ensure cleanup
+	await new Promise((resolve) => setTimeout(resolve, 100))
+
+	// Second game session - new player joins the same room
+	const context3 = await browser.newContext()
+	const page3 = await context3.newPage()
+	await page3.goto(`/play/${roomId}`)
+	await expect(page3.getByTestId('hydrated')).toBeVisible()
+
+	const connectedPlayersRegion3 = page3.getByRole('region', {
+		name: 'Connected players',
+	})
+	await expect(connectedPlayersRegion3).toBeVisible()
+
+	// Should see themselves in a fresh lobby
+	await expect(
+		connectedPlayersRegion3.getByRole('listitem').first(),
+	).toHaveText('Anonymous (you!)')
+	await expect(connectedPlayersRegion3.getByRole('listitem')).toHaveCount(1)
+
+	// Should be able to add a second player
+	const context4 = await browser.newContext()
+	const page4 = await context4.newPage()
+	await page4.goto(`/play/${roomId}`)
+	await expect(page4.getByTestId('hydrated')).toBeVisible()
+
+	await expect(connectedPlayersRegion3.getByRole('listitem')).toHaveCount(2)
+
+	// Should be able to start a fresh game
+	const startButton = page3.getByRole('button', {name: 'start'})
+	await expect(startButton).toBeEnabled()
+	await startButton.click()
+
+	await expect(page3.getByRole('complementary', {name: 'tally'})).toBeVisible()
+	await expect(page4.getByRole('complementary', {name: 'tally'})).toBeVisible()
+
+	await context3.close()
+	await context4.close()
+})

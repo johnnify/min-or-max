@@ -68,52 +68,61 @@ export class GameRoom implements DurableObject {
 			}
 
 			if (data.type === 'JOIN_GAME') {
+				await this.clearRoomIfStale()
+
 				const existingPlayer = this.playerRegistry.get(data.playerId)
 
-				playerInfo = existingPlayer || {
+				const currentPlayerInfo: PlayerInfo = existingPlayer ?? {
 					playerId: data.playerId,
 					playerName: data.playerName,
 					roomId: this.ctx.id.toString(),
 					joinedAt: performance.now(),
 				}
 
-				this.players.set(ws, playerInfo)
-				this.playerRegistry.set(data.playerId, playerInfo)
+				playerInfo = currentPlayerInfo
+				this.players.set(ws, currentPlayerInfo)
+				this.playerRegistry.set(data.playerId, currentPlayerInfo)
 				// Preserve seed from initial connection if present
 				const attachment = ws.deserializeAttachment() as {seed?: string} | null
 				const seed = attachment?.seed
-				ws.serializeAttachment({...playerInfo, ...(seed && {seed})})
+				ws.serializeAttachment({...currentPlayerInfo, ...(seed && {seed})})
+
+				const isInActorState =
+					this.currentActor
+						?.getSnapshot()
+						.context.players.some((p) => p.id === currentPlayerInfo.playerId) ??
+					false
 
 				if (!existingPlayer) {
 					this.ctx.storage.sql.exec(
 						`INSERT OR REPLACE INTO player_registry (player_id, player_name, joined_at) VALUES (?, ?, ?)`,
-						playerInfo.playerId,
-						playerInfo.playerName,
-						playerInfo.joinedAt,
+						currentPlayerInfo.playerId,
+						currentPlayerInfo.playerName,
+						currentPlayerInfo.joinedAt,
 					)
+				}
 
-					if (this.currentActor) {
-						const currentPhase = getPhaseFromState(
-							this.currentActor.getSnapshot().value,
-						)
-						if (currentPhase === 'lobby') {
-							const joinEvent: GameEvent = {
-								type: 'PLAYER_JOINED',
-								playerId: playerInfo.playerId,
-								playerName: playerInfo.playerName,
-							}
-							this.broadcastEvent(joinEvent)
-							this.currentActor.send(joinEvent)
+				if (!isInActorState && this.currentActor) {
+					const currentPhase = getPhaseFromState(
+						this.currentActor.getSnapshot().value,
+					)
+					if (currentPhase === 'lobby') {
+						const joinEvent: GameEvent = {
+							type: 'PLAYER_JOINED',
+							playerId: currentPlayerInfo.playerId,
+							playerName: currentPlayerInfo.playerName,
+						}
+						this.broadcastEvent(joinEvent)
+						this.currentActor.send(joinEvent)
 
-							// Send seed if present
-							if (seed) {
-								const seedEvent: GameEvent = {
-									type: 'SEED',
-									seed,
-								}
-								this.broadcastEvent(seedEvent)
-								this.currentActor.send(seedEvent)
+						// Send seed if present
+						if (seed) {
+							const seedEvent: GameEvent = {
+								type: 'SEED',
+								seed,
 							}
+							this.broadcastEvent(seedEvent)
+							this.currentActor.send(seedEvent)
 						}
 					}
 				}
@@ -121,7 +130,7 @@ export class GameRoom implements DurableObject {
 				ws.send(
 					JSON.stringify({
 						type: 'CONNECTED',
-						playerId: playerInfo.playerId,
+						playerId: currentPlayerInfo.playerId,
 					} satisfies ServerMessage),
 				)
 
@@ -519,6 +528,41 @@ export class GameRoom implements DurableObject {
 			type: 'GAME_RESET',
 			playerId: null,
 			data: JSON.stringify({playerCount: registeredPlayers.length}),
+			timestamp: performance.now(),
+		})
+	}
+
+	private async clearRoomIfStale() {
+		const activeConnections = this.ctx.getWebSockets()
+		const isOnlyConnection = activeConnections.length <= 1
+
+		if (isOnlyConnection && this.currentActor) {
+			const currentPhase = getPhaseFromState(
+				this.currentActor.getSnapshot().value,
+			)
+			if (currentPhase !== 'lobby') {
+				await this.clearRoom()
+			}
+		}
+	}
+
+	private async clearRoom() {
+		this.ctx.storage.sql.exec(`DELETE FROM player_registry`)
+		this.ctx.storage.sql.exec(`DELETE FROM game_state`)
+		this.playerRegistry.clear()
+		this.eventCounter = 0
+		this.lastPlayerIndex = -1
+
+		this.currentActor = createActor(minOrMaxMachine)
+		this.currentActor.subscribe((state) => {
+			this.onStateChange(state)
+		})
+		this.currentActor.start()
+
+		await this.storeTelemetryEvent({
+			type: 'ROOM_CLEARED',
+			playerId: null,
+			data: JSON.stringify({reason: 'stale_room'}),
 			timestamp: performance.now(),
 		})
 	}
