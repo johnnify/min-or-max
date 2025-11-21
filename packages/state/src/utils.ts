@@ -1,36 +1,16 @@
 import type {Rng} from '@repo/rng'
-import type {
-	Card,
-	CardSuit,
-	CardRank,
-	CardEffect,
-	PlayedCard,
-	Player,
-	GamePhase,
+import {
+	cardSuits,
+	cardRanks,
+	type Card,
+	type CardSuit,
+	type CardRank,
+	type CardEffect,
+	type PlayedCard,
+	type Player,
+	type GamePhase,
 } from './types'
 import type {MinOrMaxSnapshot} from './minOrMax'
-
-export const CARD_SUITS: readonly CardSuit[] = [
-	'hearts',
-	'diamonds',
-	'clubs',
-	'spades',
-]
-export const CARD_RANKS: readonly CardRank[] = [
-	'2',
-	'3',
-	'4',
-	'5',
-	'6',
-	'7',
-	'8',
-	'9',
-	'10',
-	'J',
-	'Q',
-	'K',
-	'A',
-]
 
 export const lowOrHighAceEffect: CardEffect = {
 	type: 'choice',
@@ -77,7 +57,7 @@ export const createPlayedCard = (
 })
 
 export const createStandardDeck = (): Card[] =>
-	CARD_SUITS.flatMap((suit) => CARD_RANKS.map((rank) => createCard(suit, rank)))
+	cardSuits.flatMap((suit) => cardRanks.map((rank) => createCard(suit, rank)))
 
 export const getCardValue = (rank: CardRank): number => {
 	if (rank === 'A') return 1

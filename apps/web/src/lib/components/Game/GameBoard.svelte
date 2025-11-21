@@ -31,6 +31,9 @@
 	import Lobby from './Lobby.svelte'
 	import DiscardPile from './DiscardPile.svelte'
 	import Scoreboard from './Scoreboard.svelte'
+	import ChoiceDialog from './ChoiceDialog/ChoiceDialog.svelte'
+	import AceChoices from './ChoiceDialog/AceChoices.svelte'
+	import JackChoices from './ChoiceDialog/JackChoices.svelte'
 
 	type Props = {
 		roomId: string
@@ -207,6 +210,24 @@
 		return false
 	})
 
+	let isConfiguringEffect = $derived.by(() => {
+		if (!actorSnapshot) return false
+		const stateValue = actorSnapshot.value
+		if (typeof stateValue === 'object' && 'playing' in stateValue) {
+			const playingState = stateValue.playing
+			if (
+				typeof playingState === 'object' &&
+				'playerTurn' in playingState &&
+				playingState.playerTurn === 'configuringEffect'
+			) {
+				return true
+			}
+		}
+		return false
+	})
+
+	let chosenCard = $derived(gameState?.chosenCard ?? null)
+
 	let mode = $derived(
 		gameState?.wheelAngle ? getModeFromWheelAngle(gameState.wheelAngle) : 'min',
 	)
@@ -238,6 +259,35 @@
 {:else if gamePhase === 'gameOver'}
 	<div>Game over! TODO: Who won?!</div>
 {:else}
+	<ChoiceDialog
+		open={isConfiguringEffect && isCurrentPlayer && chosenCard !== null}
+	>
+		{#if chosenCard?.rank === 'J'}
+			<JackChoices
+				card={chosenCard}
+				onChoice={(rank) => {
+					sendMessage({type: 'SEARCH_AND_DRAW', rank})
+					sendMessage({type: 'PLAY_CARD'})
+				}}
+			/>
+		{:else if chosenCard?.rank === 'A'}
+			<AceChoices
+				card={chosenCard}
+				onChoice={(addedValue) => {
+					sendMessage({
+						type: 'ADD_EFFECT',
+						effect: {
+							type: 'value-adder',
+							value: addedValue,
+							stacksRemaining: 1,
+						},
+					})
+					sendMessage({type: 'PLAY_CARD'})
+				}}
+			/>
+		{/if}
+	</ChoiceDialog>
+
 	<div class="space-y-4">
 		<Scoreboard tally={gameState.tally} maxThreshold={gameState.maxThreshold} />
 
@@ -316,11 +366,10 @@
 							<button
 								onclick={() => {
 									sendMessage({type: 'CHOOSE_CARD', cardId: card.id})
-									sendMessage({type: 'PLAY_CARD'})
 								}}
 								disabled={!canPlayCard(card)}
 							>
-								<GameCard {card} />
+								<GameCard {card} class={{'opacity-70': !canPlayCard(card)}} />
 							</button>
 						</li>
 					{/each}

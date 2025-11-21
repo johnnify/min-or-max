@@ -1,5 +1,10 @@
 <script lang="ts">
-	import {createCard, type Card, type CardRank} from '@repo/state'
+	import {
+		createCard,
+		faceCardRanks,
+		type Card,
+		type FaceCardRank,
+	} from '@repo/state'
 	import * as Dialog from '$lib/components/ui/dialog'
 	import GameCard from '../GameCard/GameCard.svelte'
 	import {cn} from '$lib/utils'
@@ -7,13 +12,13 @@
 
 	type Props = {
 		card: Card
+		onChoice: (rank: FaceCardRank) => void
 	}
 
-	let {card}: Props = $props()
+	let {card, onChoice}: Props = $props()
 
-	const choiceRanks: CardRank[] = ['J', 'Q', 'K']
 	let choiceCards = $derived(
-		choiceRanks.map((rank) => createCard(card.suit, rank)),
+		faceCardRanks.map((rank) => ({card: createCard(card.suit, rank), rank})),
 	)
 </script>
 
@@ -21,16 +26,17 @@
 	Which date would you like to find for your Jack?
 </Dialog.Description>
 <ol class="grid grid-cols-2 gap-4">
-	{#each choiceCards as card}
+	{#each choiceCards as { card: choiceCard, rank }}
 		<li>
 			<button
 				class={cn(
 					buttonVariants.base,
 					'flex w-full flex-col items-center text-lg',
 				)}
+				onclick={() => onChoice(rank)}
 			>
-				<GameCard {card} class="scale-50" />
-				<span>Pick <strong class="text-primary">{card.rank}</strong>!</span>
+				<GameCard card={choiceCard} />
+				<span>Pick <strong class="text-primary">{rank}</strong>!</span>
 				<span class={buttonVariants({variant: 'outline'})}>Find..?</span>
 			</button>
 		</li>

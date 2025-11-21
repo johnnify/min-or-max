@@ -79,6 +79,11 @@ test('multiplayer game lobby and start', async ({browser}) => {
 		discardPileRegion1.getByRole('img', {name: '8 of spades'}),
 	).toBeVisible()
 
+	// current tally should be 8
+	await expect(
+		page1.getByRole('complementary', {name: 'tally'}).getByText('8'),
+	).toBeVisible()
+
 	// We should change to mode max after spinning!
 	await expect(
 		page1.getByRole('heading', {level: 3, name: 'mode min'}),
@@ -94,6 +99,20 @@ test('multiplayer game lobby and start', async ({browser}) => {
 		villainHandRegion1.getByRole('img', {name: 'The back of a card'}),
 	).toHaveCount(4)
 	await expect(page1.getByRole('button', {name: 'End Turn'})).toBeDisabled()
+
+	// Player 2 plays an ace, which is a card needing a choice!
+	const heroHandRegion2 = page2.getByRole('list', {name: 'Hero hand'})
+	await heroHandRegion2.getByRole('button', {name: 'A of hearts'}).click()
+
+	const aceChoiceDialog = page2.getByRole('alertdialog', {
+		name: 'Make your choice',
+	})
+	await aceChoiceDialog.getByRole('button', {name: 'Small Ace'}).click()
+
+	// current tally should be 19 now (8 + 11)
+	await expect(
+		page2.getByRole('complementary', {name: 'tally'}).getByText('19'),
+	).toBeVisible()
 
 	await context1.close()
 	await context2.close()

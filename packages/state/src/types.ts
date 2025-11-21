@@ -2,21 +2,26 @@ import type {MinOrMaxSnapshot} from './minOrMax'
 
 export type GamePhase = 'lobby' | 'setup' | 'playing' | 'gameOver'
 
-export type CardSuit = 'hearts' | 'diamonds' | 'clubs' | 'spades'
-export type CardRank =
-	| '2'
-	| '3'
-	| '4'
-	| '5'
-	| '6'
-	| '7'
-	| '8'
-	| '9'
-	| '10'
-	| 'J'
-	| 'Q'
-	| 'K'
-	| 'A'
+export const cardSuits = ['hearts', 'diamonds', 'clubs', 'spades'] as const
+export type CardSuit = (typeof cardSuits)[number]
+
+export const faceCardRanks = ['J', 'Q', 'K'] as const
+export type FaceCardRank = (typeof faceCardRanks)[number]
+
+export const cardRanks = [
+	'2',
+	'3',
+	'4',
+	'5',
+	'6',
+	'7',
+	'8',
+	'9',
+	'10',
+	...faceCardRanks,
+	'A',
+] as const
+export type CardRank = (typeof cardRanks)[number]
 
 export type CardEffect = {
 	type: 'choice'
@@ -71,7 +76,7 @@ export type PlayingEvent =
 	| {type: 'WHEEL_SPUN'; angle: number}
 	| {type: 'CHOOSE_CARD'; cardId: string}
 	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
-	| {type: 'SEARCH_AND_DRAW'; rank: 'J' | 'Q' | 'K'}
+	| {type: 'SEARCH_AND_DRAW'; rank: FaceCardRank}
 	| {type: 'PLAY_CARD'}
 	| {type: 'END_TURN'}
 	| {type: 'SURRENDER'}
@@ -90,7 +95,7 @@ export type ClientMessage =
 	| {type: 'REQUEST_WHEEL_SPIN'; force: number}
 	| {type: 'CHOOSE_CARD'; cardId: string}
 	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
-	| {type: 'SEARCH_AND_DRAW'; rank: 'J' | 'Q' | 'K'}
+	| {type: 'SEARCH_AND_DRAW'; rank: FaceCardRank}
 	| {type: 'PLAY_CARD'}
 	| {type: 'END_TURN'}
 	| {type: 'SURRENDER'}

@@ -7,9 +7,10 @@
 
 	type Props = {
 		card: Card
+		onChoice: (addedValue: number) => void
 	}
 
-	let {card}: Props = $props()
+	let {card, onChoice}: Props = $props()
 </script>
 
 <Dialog.Description>Choose the value of your Ace:</Dialog.Description>
@@ -20,6 +21,8 @@
 				buttonVariants.base,
 				'flex w-full flex-col items-center text-lg',
 			)}
+			onclick={() => onChoice(0)}
+			aria-label="Play Small Ace for 1 value"
 		>
 			<GameCard {card} class="scale-50" />
 			<span>Small Ace (counts as <strong class="text-primary">1</strong>)</span>
@@ -32,8 +35,10 @@
 				buttonVariants.base,
 				'flex w-full flex-col items-center text-lg',
 			)}
+			onclick={() => onChoice(10)}
+			aria-label="Play Big Ace for 11 value"
 		>
-			<GameCard {card} class="scale-50" />
+			<GameCard {card} />
 			<span>Big Ace (counts as <strong class="text-primary">11</strong>)</span>
 			<span class={buttonVariants({variant: 'outline'})}>Pick!</span>
 		</button>

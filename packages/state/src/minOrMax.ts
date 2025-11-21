@@ -507,11 +507,9 @@ export const minOrMaxMachine = setup({
 							},
 						},
 						readyToPlay: {
-							on: {
-								PLAY_CARD: {
-									target: 'postCardPlay',
-									actions: 'playCard',
-								},
+							always: {
+								target: 'postCardPlay',
+								actions: 'playCard',
 							},
 						},
 						postCardPlay: {
