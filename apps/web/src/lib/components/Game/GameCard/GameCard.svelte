@@ -1,5 +1,7 @@
 <script lang="ts">
+	import {cn} from '$lib/utils'
 	import type {Card} from '@repo/state'
+	import type {HTMLAttributes} from 'svelte/elements'
 
 	type ImageModule = {
 		default: string
@@ -16,11 +18,11 @@
 		},
 	)
 
-	type Props = {
+	type Props = Pick<HTMLAttributes<HTMLButtonElement>, 'class'> & {
 		card: Card
 		hidden?: boolean
 	}
-	let {card, hidden = false}: Props = $props()
+	let {card, hidden = false, class: className}: Props = $props()
 
 	const src = $derived.by(() => {
 		if (hidden) {
@@ -45,4 +47,4 @@
 	// TODO: Random slight rotation & transform per card would be neat!
 </script>
 
-<enhanced:img {src} {alt} class="aspect-5/7 w-32" />
+<enhanced:img {src} {alt} class={cn('aspect-5/7 w-32', className)} />

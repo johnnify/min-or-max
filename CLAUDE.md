@@ -10,6 +10,17 @@ The web application serves as its own marketing site, and includes the game itse
 
 Locally, the dev server is always running at http://localhost:5173/
 
+## Coding Standards
+
+- **Strongly typed**: Consistently use type aliases for all object type definitions
+- You MUST type things accurately. Don't be lazy.
+- You must NOT use the `any` type, or similarly lazy ways out.
+- **You MUST design for a single source of truth**: DO NOT hardcode strings and arrays when data can be derived.
+- **NEVER** try format code or check for whitespace yourself. Use your Write & Edit tools properly. We have a dedicated formatter you may use at the end of your tasks.
+- It will **NEVER** be a formatting issue.
+- You must **NEVER** over-indulge with comments! If you find yourself writing comments, stop and think whether a better variable or function name would make the code clearer instead.
+- You must **NEVER** write comments which only explain the following line of code!
+
 ## Architecture
 
 ### Monorepo Structure
@@ -26,7 +37,6 @@ All commands should be run from the repository root:
 - `pnpm dev` - Start all development servers in watch mode
 - `pnpm build` - Build all apps for production
 - `pnpm test` - Run all tests (requires dev servers running)
-- `pnpm tdd` - Run tests in watch mode
 - `pnpm lint` - Lint all code
 - `pnpm format` - Format all code with Prettier
 
@@ -92,11 +102,10 @@ If you have to write a unit test, it must answer: "What bug would this catch tha
 
 EVERY test should have a realistic to see fail.
 
-### Important Notes
+### Environment Setup
 
 - Use pnpm as package manager
 - Node.js 25 required (managed by Mise)
-- All tests require dev servers running except unit tests
 
 ### Tailwind CSS v4 Configuration
 
@@ -111,24 +120,17 @@ EVERY test should have a realistic to see fail.
 
 Always prefer web standards, including using the `form` element for GET actions like filtering and pagination, and POST actions like updating a record.
 
-**Use Superforms**, which leverages SvelteKit which respects web standards and falls back to native form behaviour even when JavaScript is disabled.
+**Use SvelteKit Remote Functions `form`** with Zod: the SvelteKit philosophy respects web standards and falls back to native form behaviour even when JavaScript is disabled, and also increase DevEx thanks to strong typing.
 
 ### TypeScript Coding Standards
 
 - **Always use `type` over `interface`**: Prefer `type Props = {}` instead of `interface Props {}`
-- **Type definitions**: Consistently use type aliases for all object type definitions
 - **Function declarations**: Prefer arrow functions `const someMethod = () => {}` over function declarations `function someMethod() {}`
 - No `console.log`s committed in the code! You may use them for debugging purposes, but only use `console.info`, `console.warn`, `console.error` appropriately for code meant to remain in the codebase.
 - **Performance measurement**: Always use `performance.now()` instead of `Date.now()` for timing operations. The Performance API provides high-resolution timestamps (microsecond precision) specifically designed for performance measurement, whereas `Date.now()` is lower resolution and intended for timestamps.
 - **NEVER explicitly use `undefined`**. If you have to assign a value, use `null` instead. NEVER call a method like `antiPattern(undefined)`. You may use `antiPattern()`
-- **You MUST design for a single source of truth**: DO NOT hardcode strings and arrays when data can be derived automatically. Example: Use `import.meta.glob` to discover routes from the file system, instead of hardcoding an array of the routes you think we currently have.
-- **NEVER** try format code or check for whitespace yourself with weird commands like `sed`. We have a dedicated formatter you can use at the end of your tasks.
-- It will **NEVER** be a formatting issue.
 - As an LLM, you have difficulty telling curly apostrophes and straight apostrophes apart. **NEVER** try to change any type of code to another. If you think something is not compiling, you MUST ask the user for clarification.
 - If you add a new dependency, you **MUST** `pnpm up -r --latest` to confirm all dependencies are up to their latest versions.
-- You must NOT over-indulge with comments! If you find yourself writing comments, stop and think whether a better variable or function name would make the code clearer instead.
-- You must **NEVER** write comments which only explain the following line of code!
-- You MAY use comments, but reserve them for prefacing long chunks of logic that would be inconvenient to extract to an appropriately named function.
 
 ## QA
 
