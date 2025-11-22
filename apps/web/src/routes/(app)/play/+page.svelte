@@ -1,8 +1,9 @@
 <script lang="ts">
+	import {FieldSeparator} from '$lib/components/ui/field/index.js'
 	import Lead from '$lib/components/typography/Lead.svelte'
 	import PageTitle from '$lib/components/typography/PageTitle.svelte'
-	import Paragraph from '$lib/components/typography/Paragraph.svelte'
 	import RoomCodeForm from './RoomCodeForm.svelte'
+	import QuickplayForm from './QuickplayForm.svelte'
 </script>
 
 <main class="container grid gap-8">
@@ -13,7 +14,11 @@
 		lobby!
 	</Lead>
 
-	<!-- TODO: Join random lobby! -->
+	<section class="grid max-w-prose gap-8">
+		<QuickplayForm />
 
-	<RoomCodeForm />
+		<FieldSeparator>or</FieldSeparator>
+
+		<RoomCodeForm />
+	</section>
 </main>

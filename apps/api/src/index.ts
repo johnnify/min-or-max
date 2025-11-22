@@ -1,7 +1,8 @@
 import {getServerByName} from 'partyserver'
 import {GameRoom} from './GameRoom'
+import {Matchmaker} from './Matchmaker'
 
-export {GameRoom}
+export {GameRoom, Matchmaker}
 
 export default {
 	async fetch(
@@ -24,6 +25,14 @@ export default {
 			if (!allowedOrigins.includes(origin)) {
 				return new Response('Forbidden', {status: 403})
 			}
+		}
+
+		if (url.pathname === '/api/quickplay') {
+			const stub = await getServerByName(
+				env.MATCHMAKER as unknown as DurableObjectNamespace<Matchmaker>,
+				'singleton',
+			)
+			return stub.fetch(request)
 		}
 
 		const apiRoomPrefix = '/api/room/'

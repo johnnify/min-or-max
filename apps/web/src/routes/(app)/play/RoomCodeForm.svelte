@@ -29,7 +29,7 @@
 					</InputOTP.Group>
 				{/snippet}
 			</InputOTP.Root>
-			<Button class="max-w-72 grow">Join!</Button>
+			<Button class="grow">Join!</Button>
 		</div>
 
 		<Field.Description>Enter a room code to join!</Field.Description>

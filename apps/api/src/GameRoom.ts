@@ -16,6 +16,8 @@ import {
 import {Rng} from '@repo/rng'
 import type {PlayerInfo, StoredEvent} from './types'
 import {canPlayerSendEvent} from './orchestrator/validation'
+import {getServerByName} from 'partyserver'
+import type {Matchmaker} from './Matchmaker'
 
 type ConnectionState = PlayerInfo & {seed?: string}
 
@@ -259,6 +261,10 @@ export class GameRoom extends Server<Env> {
 					}
 
 					await this.saveState()
+
+					const playerCount =
+						this.currentActor.getSnapshot().context.players.length
+					await this.notifyMatchmaker('register', playerCount)
 				}
 			}
 
@@ -388,6 +394,8 @@ export class GameRoom extends Server<Env> {
 				'setup' in stateValue &&
 				stateValue.setup === 'shufflingPile'
 			) {
+				await this.notifyMatchmaker('unregister')
+
 				this.storeTelemetryEvent({
 					type: 'PHASE_TRANSITION',
 					playerId: playerInfo.playerId,
@@ -474,6 +482,30 @@ export class GameRoom extends Server<Env> {
 		)
 	}
 
+	private async notifyMatchmaker(
+		action: 'register' | 'unregister',
+		playerCount?: number,
+	) {
+		try {
+			const matchmaker = await getServerByName(
+				this.env.MATCHMAKER as unknown as DurableObjectNamespace<Matchmaker>,
+				'singleton',
+			)
+			await matchmaker.fetch('https://matchmaker/register', {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({
+					action,
+					roomId: this.name,
+					playerCount,
+					maxPlayers: 4,
+				}),
+			})
+		} catch (error) {
+			console.error('Failed to notify matchmaker:', error)
+		}
+	}
+
 	private async resetToLobby() {
 		if (!this.currentActor || !this.playerRegistry) return
 
@@ -500,6 +532,8 @@ export class GameRoom extends Server<Env> {
 		}
 
 		await this.saveState()
+
+		await this.notifyMatchmaker('register', registeredPlayers.length)
 
 		this.storeTelemetryEvent({
 			type: 'GAME_RESET',
@@ -538,6 +572,8 @@ export class GameRoom extends Server<Env> {
 		}
 		this.currentActor = createActor(minOrMaxMachine)
 		this.currentActor.start()
+
+		await this.notifyMatchmaker('unregister')
 
 		this.storeTelemetryEvent({
 			type: 'ROOM_CLEARED',

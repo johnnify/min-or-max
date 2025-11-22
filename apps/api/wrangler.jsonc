@@ -22,6 +22,11 @@
 				"class_name": "GameRoom",
 				"script_name": "min-or-max-api",
 			},
+			{
+				"name": "MATCHMAKER",
+				"class_name": "Matchmaker",
+				"script_name": "min-or-max-api",
+			},
 		],
 	},
 
@@ -29,6 +34,10 @@
 		{
 			"tag": "v1",
 			"new_sqlite_classes": ["GameRoom"],
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": ["Matchmaker"],
 		},
 	],
 

@@ -12,6 +12,7 @@ import worker from './index'
 const mockEnv = {
 	ALLOWED_ORIGINS: 'http://localhost:5173,https://example.com',
 	GAME_ROOM: {},
+	MATCHMAKER: {},
 } as Env
 const mockCtx = {} as ExecutionContext
 
@@ -79,5 +80,16 @@ describe('Worker routing', () => {
 
 		expect(response.status).toBe(403)
 		expect(await response.text()).toBe('Forbidden')
+	})
+
+	it('routes to matchmaker for quickplay endpoint', async () => {
+		const request = new Request('https://example.com/api/quickplay', {
+			method: 'POST',
+			headers: {Origin: 'http://localhost:5173'},
+		})
+		const response = await worker.fetch(request, mockEnv, mockCtx)
+
+		expect(response.status).toBe(200)
+		expect(mockStubFetch).toHaveBeenCalledWith(request)
 	})
 })
