@@ -475,6 +475,10 @@ export const minOrMaxMachine = setup({
 									guard: 'canBeatTopCard',
 									actions: 'setChosenCard',
 								},
+								END_TURN: {
+									target: '#minOrMax.playing.turnStart',
+									actions: 'advanceToNextPlayer',
+								},
 								SURRENDER: {
 									target: '#minOrMax.gameOver',
 									actions: 'setWinnerForSurrender',

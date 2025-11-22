@@ -1,12 +1,26 @@
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, vi, beforeEach} from 'vitest'
+
+const mockStubFetch = vi.fn()
+
+vi.mock('partyserver', () => ({
+	getServerByName: vi.fn(() => Promise.resolve({fetch: mockStubFetch})),
+	Server: class {},
+}))
+
 import worker from './index'
 
 const mockEnv = {
 	ALLOWED_ORIGINS: 'http://localhost:5173,https://example.com',
+	GAME_ROOM: {},
 } as Env
 const mockCtx = {} as ExecutionContext
 
 describe('Worker routing', () => {
+	beforeEach(() => {
+		mockStubFetch.mockReset()
+		mockStubFetch.mockResolvedValue(new Response('OK', {status: 200}))
+	})
+
 	it('routes to healthz without Origin check', async () => {
 		const request = new Request('https://example.com/healthz')
 		const response = await worker.fetch(request, mockEnv, mockCtx)
@@ -35,20 +49,9 @@ describe('Worker routing', () => {
 		expect(await response.text()).toBe('Missing roomId')
 	})
 
-	it('returns 426 when WebSocket upgrade header is missing with valid Origin', async () => {
-		const request = new Request('https://example.com/api/room/test-room-123', {
-			headers: {Origin: 'http://localhost:5173'},
-		})
-		const response = await worker.fetch(request, mockEnv, mockCtx)
-
-		expect(response.status).toBe(426)
-		expect(await response.text()).toBe('Expected WebSocket')
-	})
-
 	it('returns 403 when Origin header is from disallowed origin', async () => {
 		const request = new Request('https://example.com/api/room/test-room-123', {
 			headers: {
-				Upgrade: 'websocket',
 				Origin: 'https://malicious-site.com',
 			},
 		})
@@ -58,35 +61,20 @@ describe('Worker routing', () => {
 		expect(await response.text()).toBe('Forbidden')
 	})
 
-	it('allows request when Origin header is from allowed origin', async () => {
-		const mockEnvWithDO = {
-			...mockEnv,
-			GAME_ROOM: {
-				idFromName: () => ({}) as DurableObjectId,
-				get: () =>
-					({
-						fetch: async () => new Response('OK', {status: 200}),
-					}) as unknown as DurableObjectStub,
-			} as unknown as DurableObjectNamespace,
-		}
-
+	it('routes to game room when Origin header is from allowed origin', async () => {
 		const request = new Request('https://example.com/api/room/test-room-123', {
 			headers: {
-				Upgrade: 'websocket',
 				Origin: 'http://localhost:5173',
 			},
 		})
-		const response = await worker.fetch(request, mockEnvWithDO, mockCtx)
+		const response = await worker.fetch(request, mockEnv, mockCtx)
 
 		expect(response.status).toBe(200)
+		expect(mockStubFetch).toHaveBeenCalledWith(request)
 	})
 
 	it('rejects request when Origin header is missing', async () => {
-		const request = new Request('https://example.com/api/room/test-room-123', {
-			headers: {
-				Upgrade: 'websocket',
-			},
-		})
+		const request = new Request('https://example.com/api/room/test-room-123')
 		const response = await worker.fetch(request, mockEnv, mockCtx)
 
 		expect(response.status).toBe(403)

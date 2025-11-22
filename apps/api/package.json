@@ -15,6 +15,7 @@
 	"dependencies": {
 		"@repo/rng": "workspace:*",
 		"@repo/state": "workspace:*",
+		"partyserver": "^0.0.75",
 		"xstate": "catalog:"
 	},
 	"devDependencies": {

@@ -480,6 +480,32 @@ describe('MinOrMax Machine Tests', () => {
 			expect(handLength).toBe(4)
 		})
 
+		it('should allow player to end turn without playing a card', () => {
+			const actor = createActor(minOrMaxMachine)
+			actor.start()
+			transitionToPlaying(actor)
+
+			expect(actor.getSnapshot().value).toMatchObject({
+				playing: {playerTurn: 'awaitingAction'},
+			})
+			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(0)
+
+			const initialTally = actor.getSnapshot().context.tally
+			const player1HandSize = actor.getSnapshot().context.players[0].hand.length
+
+			actor.send({type: 'END_TURN'})
+
+			expect(actor.getSnapshot().context.currentPlayerIndex).toBe(1)
+			expect(actor.getSnapshot().context.tally).toBe(initialTally)
+			expect(actor.getSnapshot().context.players[0].hand.length).toBe(
+				player1HandSize,
+			)
+			expect(actor.getSnapshot().context.players[1].hand.length).toBe(4)
+			expect(actor.getSnapshot().value).toMatchObject({
+				playing: {playerTurn: 'awaitingAction'},
+			})
+		})
+
 		it('should allow player to choose and play a valid card', () => {
 			const actor = createActor(minOrMaxMachine)
 			actor.start()

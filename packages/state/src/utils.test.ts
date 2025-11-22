@@ -1,6 +1,12 @@
 import {describe, it, expect} from 'vitest'
-import {getModeFromWheelAngle, canCardBeatTopCard} from './utils'
-import type {Card} from './types'
+import {
+	getModeFromWheelAngle,
+	canCardBeatTopCard,
+	determineAutoPlayAction,
+	createPlayedCard,
+	createCard,
+} from './utils'
+import type {Card, Player, PlayedCard} from './types'
 
 describe('getModeFromWheelAngle', () => {
 	it('returns max mode for angles in the first half of rotation (0-179 degrees)', () => {
@@ -34,31 +40,31 @@ describe('getModeFromWheelAngle', () => {
 	})
 })
 
-describe('canCardBeatTopCard', () => {
-	const createCard = (
-		rank: Card['rank'],
-		suit: Card['suit'] = 'hearts',
-	): Card => ({
-		id: `${rank}-${suit}`,
-		rank,
-		suit,
-	})
+const createTestCard = (
+	rank: Card['rank'],
+	suit: Card['suit'] = 'hearts',
+): Card => ({
+	id: `${rank}-${suit}`,
+	rank,
+	suit,
+})
 
+describe('canCardBeatTopCard', () => {
 	it('returns true when there is no top card', () => {
-		const card = createCard('5')
+		const card = createTestCard('5')
 		expect(canCardBeatTopCard(card, null, 90)).toBe(true)
 	})
 
 	it('allows Aces to be played on any card', () => {
-		const ace = createCard('A')
-		const topCard = createCard('K')
+		const ace = createTestCard('A')
+		const topCard = createTestCard('K')
 		expect(canCardBeatTopCard(ace, topCard, 90)).toBe(true)
 		expect(canCardBeatTopCard(ace, topCard, 270)).toBe(true)
 	})
 
 	it('allows any card to be played on an Ace', () => {
-		const card = createCard('2')
-		const topAce = createCard('A')
+		const card = createTestCard('2')
+		const topAce = createTestCard('A')
 		expect(canCardBeatTopCard(card, topAce, 90)).toBe(true)
 		expect(canCardBeatTopCard(card, topAce, 270)).toBe(true)
 	})
@@ -67,30 +73,30 @@ describe('canCardBeatTopCard', () => {
 		const wheelAngle = 90
 
 		it('allows cards with value >= top card', () => {
-			const topCard = createCard('5')
-			expect(canCardBeatTopCard(createCard('5'), topCard, wheelAngle)).toBe(
+			const topCard = createTestCard('5')
+			expect(canCardBeatTopCard(createTestCard('5'), topCard, wheelAngle)).toBe(
 				true,
 			)
-			expect(canCardBeatTopCard(createCard('6'), topCard, wheelAngle)).toBe(
+			expect(canCardBeatTopCard(createTestCard('6'), topCard, wheelAngle)).toBe(
 				true,
 			)
-			expect(canCardBeatTopCard(createCard('10'), topCard, wheelAngle)).toBe(
-				true,
-			)
-			expect(canCardBeatTopCard(createCard('K'), topCard, wheelAngle)).toBe(
+			expect(
+				canCardBeatTopCard(createTestCard('10'), topCard, wheelAngle),
+			).toBe(true)
+			expect(canCardBeatTopCard(createTestCard('K'), topCard, wheelAngle)).toBe(
 				true,
 			)
 		})
 
 		it('rejects cards with value < top card', () => {
-			const topCard = createCard('5')
-			expect(canCardBeatTopCard(createCard('2'), topCard, wheelAngle)).toBe(
+			const topCard = createTestCard('5')
+			expect(canCardBeatTopCard(createTestCard('2'), topCard, wheelAngle)).toBe(
 				false,
 			)
-			expect(canCardBeatTopCard(createCard('3'), topCard, wheelAngle)).toBe(
+			expect(canCardBeatTopCard(createTestCard('3'), topCard, wheelAngle)).toBe(
 				false,
 			)
-			expect(canCardBeatTopCard(createCard('4'), topCard, wheelAngle)).toBe(
+			expect(canCardBeatTopCard(createTestCard('4'), topCard, wheelAngle)).toBe(
 				false,
 			)
 		})
@@ -100,36 +106,152 @@ describe('canCardBeatTopCard', () => {
 		const wheelAngle = 270
 
 		it('allows cards with value <= top card', () => {
-			const topCard = createCard('5')
-			expect(canCardBeatTopCard(createCard('2'), topCard, wheelAngle)).toBe(
+			const topCard = createTestCard('5')
+			expect(canCardBeatTopCard(createTestCard('2'), topCard, wheelAngle)).toBe(
 				true,
 			)
-			expect(canCardBeatTopCard(createCard('3'), topCard, wheelAngle)).toBe(
+			expect(canCardBeatTopCard(createTestCard('3'), topCard, wheelAngle)).toBe(
 				true,
 			)
-			expect(canCardBeatTopCard(createCard('5'), topCard, wheelAngle)).toBe(
+			expect(canCardBeatTopCard(createTestCard('5'), topCard, wheelAngle)).toBe(
 				true,
 			)
 		})
 
 		it('rejects cards with value > top card', () => {
-			const topCard = createCard('5')
-			expect(canCardBeatTopCard(createCard('6'), topCard, wheelAngle)).toBe(
+			const topCard = createTestCard('5')
+			expect(canCardBeatTopCard(createTestCard('6'), topCard, wheelAngle)).toBe(
 				false,
 			)
-			expect(canCardBeatTopCard(createCard('10'), topCard, wheelAngle)).toBe(
-				false,
-			)
-			expect(canCardBeatTopCard(createCard('K'), topCard, wheelAngle)).toBe(
+			expect(
+				canCardBeatTopCard(createTestCard('10'), topCard, wheelAngle),
+			).toBe(false)
+			expect(canCardBeatTopCard(createTestCard('K'), topCard, wheelAngle)).toBe(
 				false,
 			)
 		})
 	})
 
 	it('handles face cards correctly', () => {
-		const topCard = createCard('J')
-		expect(canCardBeatTopCard(createCard('Q'), topCard, 90)).toBe(true)
-		expect(canCardBeatTopCard(createCard('K'), topCard, 90)).toBe(true)
-		expect(canCardBeatTopCard(createCard('9'), topCard, 90)).toBe(false)
+		const topCard = createTestCard('J')
+		expect(canCardBeatTopCard(createTestCard('Q'), topCard, 90)).toBe(true)
+		expect(canCardBeatTopCard(createTestCard('K'), topCard, 90)).toBe(true)
+		expect(canCardBeatTopCard(createTestCard('9'), topCard, 90)).toBe(false)
+	})
+})
+
+describe('determineAutoPlayAction', () => {
+	const createPlayer = (id: string, hand: Card[], name = 'Player'): Player => ({
+		id,
+		name,
+		isReady: true,
+		hand,
+	})
+
+	const createContext = (
+		players: Player[],
+		currentPlayerIndex: number,
+		discardPile: PlayedCard[],
+		wheelAngle: number,
+		hasSpunThisTurn: boolean,
+	) => ({
+		players,
+		currentPlayerIndex,
+		discardPile,
+		wheelAngle,
+		hasSpunThisTurn,
+	})
+
+	it('returns null when player is not the current player', () => {
+		const player1 = createPlayer('player-1', [createCard('hearts', '5')])
+		const player2 = createPlayer('player-2', [createCard('diamonds', '6')])
+		const context = createContext([player1, player2], 0, [], 90, false)
+
+		expect(determineAutoPlayAction(context, 'player-2')).toBeNull()
+	})
+
+	it('returns null when player ID does not match any player', () => {
+		const player1 = createPlayer('player-1', [createCard('hearts', '5')])
+		const context = createContext([player1], 0, [], 90, false)
+
+		expect(determineAutoPlayAction(context, 'unknown-player')).toBeNull()
+	})
+
+	it('returns play_card when the current player has a valid card', () => {
+		const card = createCard('hearts', '8')
+		const player = createPlayer('player-1', [card])
+		const topCard = createPlayedCard(createCard('diamonds', '5'), 5)
+		const context = createContext([player], 0, [topCard], 90, false)
+
+		const result = determineAutoPlayAction(context, 'player-1')
+
+		expect(result).toEqual({type: 'play_card', cardId: 'hearts-8'})
+	})
+
+	it('finds the first valid card in hand when some cards cannot beat top card', () => {
+		const invalidCard = createCard('hearts', '3')
+		const validCard = createCard('diamonds', '7')
+		const player = createPlayer('player-1', [invalidCard, validCard])
+		const topCard = createPlayedCard(createCard('spades', '5'), 5)
+		const context = createContext([player], 0, [topCard], 90, false)
+
+		const result = determineAutoPlayAction(context, 'player-1')
+
+		expect(result).toEqual({type: 'play_card', cardId: 'diamonds-7'})
+	})
+
+	it('returns play_card with any card when discard pile is empty', () => {
+		const card = createCard('hearts', '2')
+		const player = createPlayer('player-1', [card])
+		const context = createContext([player], 0, [], 90, false)
+
+		const result = determineAutoPlayAction(context, 'player-1')
+
+		expect(result).toEqual({type: 'play_card', cardId: 'hearts-2'})
+	})
+
+	it('returns spin when no valid card exists and has not spun this turn', () => {
+		const card = createCard('hearts', '3')
+		const player = createPlayer('player-1', [card])
+		const topCard = createPlayedCard(createCard('diamonds', '8'), 8)
+		const context = createContext([player], 0, [topCard], 90, false)
+
+		const result = determineAutoPlayAction(context, 'player-1')
+
+		expect(result).toEqual({type: 'spin'})
+	})
+
+	it('returns end_turn when no valid card exists and has already spun', () => {
+		const card = createCard('hearts', '3')
+		const player = createPlayer('player-1', [card])
+		const topCard = createPlayedCard(createCard('diamonds', '8'), 8)
+		const context = createContext([player], 0, [topCard], 90, true)
+
+		const result = determineAutoPlayAction(context, 'player-1')
+
+		expect(result).toEqual({type: 'end_turn'})
+	})
+
+	it('respects wheel mode when determining valid cards (min mode)', () => {
+		const lowCard = createCard('hearts', '3')
+		const highCard = createCard('diamonds', '9')
+		const player = createPlayer('player-1', [highCard, lowCard])
+		const topCard = createPlayedCard(createCard('spades', '5'), 5)
+		const context = createContext([player], 0, [topCard], 270, false)
+
+		const result = determineAutoPlayAction(context, 'player-1')
+
+		expect(result).toEqual({type: 'play_card', cardId: 'hearts-3'})
+	})
+
+	it('allows Ace to be played on any card regardless of wheel mode', () => {
+		const ace = createCard('hearts', 'A')
+		const player = createPlayer('player-1', [ace])
+		const topCard = createPlayedCard(createCard('diamonds', 'K'), 10)
+		const context = createContext([player], 0, [topCard], 90, false)
+
+		const result = determineAutoPlayAction(context, 'player-1')
+
+		expect(result).toEqual({type: 'play_card', cardId: 'hearts-A'})
 	})
 })

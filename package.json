@@ -16,7 +16,7 @@
 		"@prettier/plugin-oxc": "^0.0.5",
 		"@types/node": "catalog:",
 		"oxlint": "^1.29.0",
-		"oxlint-tsgolint": "^0.8.0",
+		"oxlint-tsgolint": "^0.8.1",
 		"prettier": "^3.6.2",
 		"prettier-plugin-svelte": "^3.4.0",
 		"prettier-plugin-tailwindcss": "^0.7.1",

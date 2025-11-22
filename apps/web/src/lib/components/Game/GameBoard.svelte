@@ -1,5 +1,5 @@
 <script lang="ts">
-	import {SvelteMap} from 'svelte/reactivity'
+	import {WebSocket as ReconnectingWebSocket} from 'partysocket'
 	import {createActor} from 'xstate'
 	import {toast} from 'svelte-sonner'
 	import {
@@ -42,7 +42,8 @@
 	}
 	let {roomId, player, seed}: Props = $props()
 
-	let roomIdsToWs = new SvelteMap<string, WebSocket>()
+	let socket = $state<ReconnectingWebSocket | null>(null)
+	let isConnected = $state(false)
 
 	let minOrMaxActor = $state(createActor(minOrMaxMachine))
 	let actorSnapshot = $state<MinOrMaxSnapshot>()
@@ -61,22 +62,15 @@
 	})
 
 	const sendMessage = (message: ClientMessage) => {
-		const ws = roomIdsToWs.get(roomId)
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			ws.send(JSON.stringify(message))
+		if (socket) {
+			socket.send(JSON.stringify(message))
+		} else {
+			toast.error('Not yet connected to the game server...')
 		}
 	}
 
 	$effect(() => {
-		if (!browser || roomIdsToWs.has(roomId)) return
-
-		// close and delete any other connections
-		roomIdsToWs.forEach((ws, id) => {
-			if (id === roomId) return
-
-			ws.close()
-			roomIdsToWs.delete(id)
-		})
+		if (!browser) return
 
 		const wsBaseUrl = PUBLIC_API_URL.replace(/^http/, 'ws')
 		const wsUrl = new URL(`/api/room/${roomId}`, wsBaseUrl)
@@ -85,21 +79,23 @@
 			wsUrl.searchParams.set('seed', seed)
 		}
 
-		const ws = new WebSocket(wsUrl)
-		roomIdsToWs.set(roomId, ws)
+		const ws = new ReconnectingWebSocket(wsUrl.toString())
 
-		ws.onopen = () => {
+		socket = ws
+
+		ws.addEventListener('open', () => {
+			isConnected = true
 			ws.send(
 				JSON.stringify({
 					type: 'JOIN_GAME',
 					playerId: player.id,
 					playerName: player.name,
-				}),
+				} satisfies ClientMessage),
 			)
-		}
+		})
 
-		ws.onmessage = (event) => {
-			const data = JSON.parse(event.data)
+		ws.addEventListener('message', (event) => {
+			const data = JSON.parse(event.data as string)
 
 			if (!isServerMessage(data)) {
 				console.error('Invalid server message:', data)
@@ -107,7 +103,6 @@
 			}
 
 			if (isGameEvent(data)) {
-				// Apply the event to the local state machine
 				console.info('Received game event:', data.event)
 				minOrMaxActor.send(data.event)
 			} else if (isStateSnapshot(data)) {
@@ -116,7 +111,6 @@
 					return
 				}
 
-				// Reconstitute the Rng instance from serialized JSON data
 				data.state.context.rng = Rng.fromJSON(data.state.context.rng)
 
 				minOrMaxActor.stop()
@@ -130,19 +124,22 @@
 			} else if (data.type === 'ERROR') {
 				toast.error(data.message)
 			}
-		}
+		})
 
-		ws.onerror = (err) => {
-			toast.error('There was an error with your multiplayer connection!')
+		ws.addEventListener('close', () => {
+			isConnected = false
+			toast.info('Connection lost. Reconnecting...')
+		})
+
+		ws.addEventListener('error', (err) => {
 			console.error('WebSocket error:', err)
-		}
+		})
 
-		ws.onclose = () => {
-			roomIdsToWs.delete(roomId)
+		return () => {
+			ws.close()
+			socket = null
 		}
 	})
-
-	let isConnected = $derived(roomIdsToWs.has(roomId))
 
 	let gamePhase = $derived(
 		actorSnapshot ? getPhaseFromState(actorSnapshot.value) : 'lobby',

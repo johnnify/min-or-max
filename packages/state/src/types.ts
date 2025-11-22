@@ -109,9 +109,6 @@ export type ServerMessage =
 	| {type: 'ERROR'; message: string}
 	| {type: 'PLAYER_JOINED'; playerId: string; playerName: string}
 	| {type: 'PLAYER_LEFT'; playerId: string}
-	| {type: 'AUTO_WHEEL_SPUN'; angle: number}
-	| {type: 'AUTO_PLAY'; cardId: string}
-	| {type: 'PLAYER_SURRENDERED'; playerId: string}
 
 // Type Guards
 export const isServerMessage = (data: unknown): data is ServerMessage => {
@@ -146,12 +143,6 @@ export const isServerMessage = (data: unknown): data is ServerMessage => {
 				typeof message.playerName === 'string'
 			)
 		case 'PLAYER_LEFT':
-			return typeof message.playerId === 'string'
-		case 'AUTO_WHEEL_SPUN':
-			return typeof message.angle === 'number'
-		case 'AUTO_PLAY':
-			return typeof message.cardId === 'string'
-		case 'PLAYER_SURRENDERED':
 			return typeof message.playerId === 'string'
 		default:
 			return false

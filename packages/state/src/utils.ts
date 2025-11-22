@@ -133,3 +133,42 @@ export const getPhaseFromState = (
 	}
 	return 'lobby'
 }
+
+export type AutoPlayAction =
+	| {type: 'play_card'; cardId: string}
+	| {type: 'spin'}
+	| {type: 'end_turn'}
+
+export const determineAutoPlayAction = (
+	context: {
+		players: Player[]
+		currentPlayerIndex: number
+		discardPile: PlayedCard[]
+		wheelAngle: number
+		hasSpunThisTurn: boolean
+	},
+	playerId: string,
+): AutoPlayAction | null => {
+	const currentPlayer = context.players[context.currentPlayerIndex]
+
+	if (!currentPlayer || currentPlayer.id !== playerId) {
+		return null
+	}
+
+	const topPlayedCard = context.discardPile.at(-1)
+	const topCard = topPlayedCard?.card ?? null
+
+	const validCard = currentPlayer.hand.find((card) =>
+		canCardBeatTopCard(card, topCard, context.wheelAngle),
+	)
+
+	if (validCard) {
+		return {type: 'play_card', cardId: validCard.id}
+	}
+
+	if (!context.hasSpunThisTurn) {
+		return {type: 'spin'}
+	}
+
+	return {type: 'end_turn'}
+}

@@ -1,4 +1,7 @@
-export {GameRoom} from './GameRoom'
+import {getServerByName} from 'partyserver'
+import {GameRoom} from './GameRoom'
+
+export {GameRoom}
 
 export default {
 	async fetch(
@@ -23,21 +26,18 @@ export default {
 			}
 		}
 
-		if (url.pathname.startsWith('/api/room/')) {
-			const roomId = url.pathname.slice('/api/room/'.length)
+		const apiRoomPrefix = '/api/room/'
+		if (url.pathname.startsWith(apiRoomPrefix)) {
+			const roomId = url.pathname.slice(apiRoomPrefix.length)
 
 			if (!roomId) {
 				return new Response('Missing roomId', {status: 400})
 			}
 
-			const upgradeHeader = request.headers.get('Upgrade')
-			if (upgradeHeader !== 'websocket') {
-				return new Response('Expected WebSocket', {status: 426})
-			}
-
-			const id = env.GAME_ROOM.idFromName(roomId)
-			const stub = env.GAME_ROOM.get(id)
-
+			const stub = await getServerByName(
+				env.GAME_ROOM as unknown as DurableObjectNamespace<GameRoom>,
+				roomId,
+			)
 			return stub.fetch(request)
 		}
 
