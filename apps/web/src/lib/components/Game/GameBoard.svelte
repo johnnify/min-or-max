@@ -128,7 +128,6 @@
 
 		ws.addEventListener('close', () => {
 			isConnected = false
-			toast.info('Connection lost. Reconnecting...')
 		})
 
 		ws.addEventListener('error', (err) => {
@@ -228,6 +227,18 @@
 	let mode = $derived(
 		gameState?.wheelAngle ? getModeFromWheelAngle(gameState.wheelAngle) : 'min',
 	)
+
+	$effect(() => {
+		if (!isConnected) {
+			const timeout = setTimeout(() => {
+				toast.warning('Connection lost! Reconnecting...')
+			}, 5_000)
+
+			return () => {
+				clearTimeout(timeout)
+			}
+		}
+	})
 </script>
 
 <div class="mb-[5svh] flex justify-between gap-4">
@@ -353,9 +364,13 @@
 			</div>
 
 			<div class="text-center">
-				<p class="mb-2 text-sm">
+				<p class="mb-2 flex flex-col items-center gap-1 text-sm">
 					{player.name} (you!)
-					<!-- TODO: UI to make it obvious it's our turn -->
+					{#if isCurrentPlayer}
+						<Badge>you’re up!</Badge>
+					{:else}
+						<Badge variant="secondary">waiting...</Badge>
+					{/if}
 				</p>
 				<ul class="flex justify-center gap-2" aria-label="Hero hand">
 					{#each hero?.hand as card (card.id)}
