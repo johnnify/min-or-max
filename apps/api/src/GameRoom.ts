@@ -76,6 +76,39 @@ export class GameRoom extends Server<Env> {
 				} satisfies ServerMessage),
 				[connection.id],
 			)
+
+			await this.handlePlayerDisconnect(connectionState.playerId)
+		}
+	}
+
+	private async handlePlayerDisconnect(playerId: string) {
+		await this.ensureState()
+		if (!this.currentActor || !this.playerRegistry) return
+
+		const currentPhase = getPhaseFromState(
+			this.currentActor.getSnapshot().value,
+		)
+		if (currentPhase !== 'lobby') return
+
+		this.playerRegistry.delete(playerId)
+		this.ctx.storage.sql.exec(
+			`DELETE FROM player_registry WHERE player_id = ?`,
+			playerId,
+		)
+
+		const leaveEvent: GameEvent = {
+			type: 'PLAYER_DROPPED',
+			playerId,
+		}
+		this.broadcastEvent(leaveEvent)
+		this.currentActor.send(leaveEvent)
+		await this.saveState()
+
+		const playerCount = this.currentActor.getSnapshot().context.players.length
+		if (playerCount > 0) {
+			await this.notifyMatchmaker('register', playerCount)
+		} else {
+			await this.notifyMatchmaker('unregister')
 		}
 	}
 
