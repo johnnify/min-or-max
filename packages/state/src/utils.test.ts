@@ -5,8 +5,56 @@ import {
 	determineAutoPlayAction,
 	createPlayedCard,
 	createCard,
+	getCardValue,
+	getCardOrder,
 } from './utils'
 import type {Card, Player, PlayedCard} from './types'
+
+describe('getCardValue', () => {
+	it('returns correct values for number cards', () => {
+		expect(getCardValue('2')).toBe(2)
+		expect(getCardValue('5')).toBe(5)
+		expect(getCardValue('10')).toBe(10)
+	})
+
+	it('returns 1 for Ace (base value before effect)', () => {
+		expect(getCardValue('A')).toBe(1)
+	})
+
+	it('returns 10 for all face cards (scoring value)', () => {
+		expect(getCardValue('J')).toBe(10)
+		expect(getCardValue('Q')).toBe(10)
+		expect(getCardValue('K')).toBe(10)
+	})
+})
+
+describe('getCardOrder', () => {
+	it('returns correct order for number cards', () => {
+		expect(getCardOrder('2')).toBe(2)
+		expect(getCardOrder('5')).toBe(5)
+		expect(getCardOrder('10')).toBe(10)
+	})
+
+	it('returns 1 for Ace', () => {
+		expect(getCardOrder('A')).toBe(1)
+	})
+
+	it('returns distinct ascending values for face cards (10 < J < Q < K)', () => {
+		const tenOrder = getCardOrder('10')
+		const jackOrder = getCardOrder('J')
+		const queenOrder = getCardOrder('Q')
+		const kingOrder = getCardOrder('K')
+
+		expect(tenOrder).toBe(10)
+		expect(jackOrder).toBe(11)
+		expect(queenOrder).toBe(12)
+		expect(kingOrder).toBe(13)
+
+		expect(tenOrder).toBeLessThan(jackOrder)
+		expect(jackOrder).toBeLessThan(queenOrder)
+		expect(queenOrder).toBeLessThan(kingOrder)
+	})
+})
 
 describe('getModeFromWheelAngle', () => {
 	it('returns max mode for angles in the first half of rotation (0-179 degrees)', () => {

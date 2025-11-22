@@ -2,7 +2,7 @@ import {createActor} from 'xstate'
 import {describe, it, expect} from 'vitest'
 import {minOrMaxMachine} from './minOrMax'
 import {Rng} from '@repo/rng'
-import {getCardValue, getModeFromWheelAngle, calculateSpin} from './utils'
+import {getCardOrder, getModeFromWheelAngle, calculateSpin} from './utils'
 import type {Card} from './types'
 
 const findValidCard = (
@@ -15,14 +15,14 @@ const findValidCard = (
 
 	if (topCard.rank === 'A') return hand[0]
 
-	const topValue = getCardValue(topCard.rank)
+	const topOrder = getCardOrder(topCard.rank)
 
 	return hand.find((c) => {
-		const cardValue = getCardValue(c.rank)
+		const cardOrder = getCardOrder(c.rank)
 		if (wheelMode === 'max') {
-			return cardValue >= topValue
+			return cardOrder >= topOrder
 		} else {
-			return cardValue <= topValue
+			return cardOrder <= topOrder
 		}
 	})
 }
@@ -748,12 +748,12 @@ describe('MinOrMax Machine Tests', () => {
 
 			if (wheelAngle < 180) {
 				const topCard = actor.getSnapshot().context.discardPile[0].card
-				const topValue = getCardValue(topCard.rank)
+				const topValue = getCardOrder(topCard.rank)
 
 				const tooLowCard = actor
 					.getSnapshot()
 					.context.players[0].hand.find((card) => {
-						const cardValue = getCardValue(card.rank)
+						const cardValue = getCardOrder(card.rank)
 						return cardValue < topValue && card.rank !== 'A'
 					})
 
@@ -782,12 +782,12 @@ describe('MinOrMax Machine Tests', () => {
 
 			if (wheelAngle < 180) {
 				const topCard = actor.getSnapshot().context.discardPile[0].card
-				const topValue = getCardValue(topCard.rank)
+				const topValue = getCardOrder(topCard.rank)
 
 				const validCard = actor
 					.getSnapshot()
 					.context.players[0].hand.find((card) => {
-						const cardValue = getCardValue(card.rank)
+						const cardValue = getCardOrder(card.rank)
 						return cardValue >= topValue || card.rank === 'A'
 					})
 
@@ -817,12 +817,12 @@ describe('MinOrMax Machine Tests', () => {
 			expect(wheelMode).toBe('min')
 
 			const topCard = actor.getSnapshot().context.discardPile[0].card
-			const topValue = getCardValue(topCard.rank)
+			const topValue = getCardOrder(topCard.rank)
 
 			const tooHighCard = actor
 				.getSnapshot()
 				.context.players[0].hand.find((card) => {
-					const cardValue = getCardValue(card.rank)
+					const cardValue = getCardOrder(card.rank)
 					return cardValue > topValue && card.rank !== 'A'
 				})
 
@@ -851,12 +851,12 @@ describe('MinOrMax Machine Tests', () => {
 			expect(wheelMode).toBe('min')
 
 			const topCard = actor.getSnapshot().context.discardPile[0].card
-			const topValue = getCardValue(topCard.rank)
+			const topValue = getCardOrder(topCard.rank)
 
 			const validCard = actor
 				.getSnapshot()
 				.context.players[0].hand.find((card) => {
-					const cardValue = getCardValue(card.rank)
+					const cardValue = getCardOrder(card.rank)
 					return cardValue <= topValue || card.rank === 'A'
 				})
 
@@ -955,8 +955,8 @@ describe('MinOrMax Machine Tests', () => {
 						if (card.rank === 'A' || topCard.card.rank === 'A') return true
 						const wheelAngle = snapshot.context.wheelAngle
 						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-						const cardValue = getCardValue(card.rank)
-						const topValue = getCardValue(topCard.card.rank)
+						const cardValue = getCardOrder(card.rank)
+						const topValue = getCardOrder(topCard.card.rank)
 						if (wheelMode === 'max') {
 							return cardValue >= topValue
 						} else {
@@ -1093,8 +1093,8 @@ describe('MinOrMax Machine Tests', () => {
 
 				const validCard = hand.find((c) => {
 					if (c.rank === 'A') return true
-					const cardValue = getCardValue(c.rank)
-					const topValue = getCardValue(topCard.rank)
+					const cardValue = getCardOrder(c.rank)
+					const topValue = getCardOrder(topCard.rank)
 					return wheelMode === 'max'
 						? cardValue >= topValue
 						: cardValue <= topValue
@@ -1173,8 +1173,8 @@ describe('MinOrMax Machine Tests', () => {
 						if (card.rank === 'A' || topCard.card.rank === 'A') return true
 						const wheelAngle = snapshot.context.wheelAngle
 						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-						const cardValue = getCardValue(card.rank)
-						const topValue = getCardValue(topCard.card.rank)
+						const cardValue = getCardOrder(card.rank)
+						const topValue = getCardOrder(topCard.card.rank)
 						if (wheelMode === 'max') {
 							return cardValue >= topValue
 						} else {
@@ -1187,7 +1187,7 @@ describe('MinOrMax Machine Tests', () => {
 					actor.send({type: 'CHOOSE_CARD', cardId: playableCard.id})
 					if (playableCard.effect) {
 						const currentTally = snapshot.context.tally
-						const cardValue = getCardValue(playableCard.rank)
+						const cardValue = getCardOrder(playableCard.rank)
 						const neededToMax = maxThreshold - currentTally
 						const effectValue =
 							neededToMax === cardValue + 10
@@ -1270,8 +1270,8 @@ describe('MinOrMax Machine Tests', () => {
 						if (card.rank === 'A' || topCard.card.rank === 'A') return true
 						const wheelAngle = snapshot.context.wheelAngle
 						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-						const cardValue = getCardValue(card.rank)
-						const topValue = getCardValue(topCard.card.rank)
+						const cardValue = getCardOrder(card.rank)
+						const topValue = getCardOrder(topCard.card.rank)
 						if (wheelMode === 'max') {
 							return cardValue >= topValue
 						} else {
@@ -1698,8 +1698,8 @@ describe('MinOrMax Machine Tests', () => {
 						if (card.rank === 'A' || topCard.card.rank === 'A') return true
 						const wheelAngle = snapshot.context.wheelAngle
 						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-						const cardValue = getCardValue(card.rank)
-						const topValue = getCardValue(topCard.card.rank)
+						const cardValue = getCardOrder(card.rank)
+						const topValue = getCardOrder(topCard.card.rank)
 						if (wheelMode === 'max') {
 							return cardValue >= topValue
 						} else {
@@ -1790,8 +1790,8 @@ describe('MinOrMax Machine Tests', () => {
 						if (card.rank === 'A' || topCard.card.rank === 'A') return true
 						const wheelAngle = snapshot.context.wheelAngle
 						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
-						const cardValue = getCardValue(card.rank)
-						const topValue = getCardValue(topCard.card.rank)
+						const cardValue = getCardOrder(card.rank)
+						const topValue = getCardOrder(topCard.card.rank)
 						if (wheelMode === 'max') {
 							return cardValue >= topValue
 						} else {
@@ -1915,8 +1915,8 @@ describe('MinOrMax Machine Tests', () => {
 							if (card.rank === 'A' || topCard.card.rank === 'A') return true
 							const currentWheelAngle = snapshot.context.wheelAngle
 							const wheelMode = currentWheelAngle >= 180 ? 'min' : 'max'
-							const cardValue = getCardValue(card.rank)
-							const topValue = getCardValue(topCard.card.rank)
+							const cardValue = getCardOrder(card.rank)
+							const topValue = getCardOrder(topCard.card.rank)
 							if (wheelMode === 'max') {
 								return cardValue >= topValue
 							} else {

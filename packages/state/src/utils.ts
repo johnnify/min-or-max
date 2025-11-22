@@ -65,6 +65,14 @@ export const getCardValue = (rank: CardRank): number => {
 	return parseInt(rank, 10)
 }
 
+export const getCardOrder = (rank: CardRank): number => {
+	if (rank === 'A') return 1
+	if (rank === 'J') return 11
+	if (rank === 'Q') return 12
+	if (rank === 'K') return 13
+	return parseInt(rank, 10)
+}
+
 export const getModeFromWheelAngle = (wheelAngle: number): 'min' | 'max' => {
 	const normalizedAngle = ((wheelAngle % 360) + 360) % 360
 	return normalizedAngle >= 180 ? 'min' : 'max'
@@ -79,14 +87,14 @@ export const canCardBeatTopCard = (
 
 	if (chosenCard.rank === 'A' || topCard.rank === 'A') return true
 
-	const chosenValue = getCardValue(chosenCard.rank)
-	const topValue = getCardValue(topCard.rank)
+	const chosenOrder = getCardOrder(chosenCard.rank)
+	const topOrder = getCardOrder(topCard.rank)
 	const wheelMode = getModeFromWheelAngle(wheelAngle)
 
 	if (wheelMode === 'max') {
-		return chosenValue >= topValue
+		return chosenOrder >= topOrder
 	} else {
-		return chosenValue <= topValue
+		return chosenOrder <= topOrder
 	}
 }
 
