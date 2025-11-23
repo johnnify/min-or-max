@@ -41,6 +41,7 @@
 		"playwright": "^1.56.1",
 		"svelte": "^5.43.14",
 		"svelte-check": "^4.3.4",
+		"svelte-confetti": "^2.3.2",
 		"svelte-sonner": "^1.0.6",
 		"tailwind-merge": "^3.4.0",
 		"tailwind-variants": "^3.2.2",

@@ -170,7 +170,7 @@
 		}}
 	/>
 {:else if gamePhase === 'gameOver'}
-	<GameOver />
+	<GameOver {gameState} {player} />
 {:else}
 	<GameBoard {gameState} {actorSnapshot} {player} {sendMessage} />
 {/if}
