@@ -114,9 +114,11 @@ export const calculateCurrentPlayerWins = (
 	players: Player[],
 	currentPlayerIndex: number,
 ) => {
-	const winner = players[currentPlayerIndex]
+	const currentWinner = players[currentPlayerIndex]
+	const winner = {...currentWinner, wins: currentWinner.wins + 1}
 	const losers = players.filter((p) => p.id !== winner.id)
-	return {winner, losers}
+	const updatedPlayers = players.map((p) => (p.id === winner.id ? winner : p))
+	return {winner, losers, players: updatedPlayers}
 }
 
 export const calculatePreviousPlayerWins = (
@@ -125,9 +127,11 @@ export const calculatePreviousPlayerWins = (
 ) => {
 	const previousPlayerIndex =
 		(currentPlayerIndex - 1 + players.length) % players.length
-	const winner = players[previousPlayerIndex]
+	const currentWinner = players[previousPlayerIndex]
+	const winner = {...currentWinner, wins: currentWinner.wins + 1}
 	const losers = players.filter((p) => p.id !== winner.id)
-	return {winner, losers}
+	const updatedPlayers = players.map((p) => (p.id === winner.id ? winner : p))
+	return {winner, losers, players: updatedPlayers}
 }
 
 export const getPhaseFromState = (

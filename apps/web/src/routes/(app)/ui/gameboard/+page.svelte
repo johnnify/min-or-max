@@ -24,6 +24,7 @@
 				createCard('diamonds', '3'),
 				createCard('clubs', 'A'),
 			],
+			wins: 0,
 		},
 		{
 			id: villainId,
@@ -34,6 +35,7 @@
 				createCard('spades', '5'),
 				createCard('diamonds', 'K'),
 			],
+			wins: 0,
 		},
 	]
 

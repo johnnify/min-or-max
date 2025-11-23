@@ -60,6 +60,7 @@ describe('MinOrMax Machine Tests', () => {
 				name: 'Alice',
 				isReady: true,
 				hand: [],
+				wins: 0,
 			})
 		})
 
@@ -1959,6 +1960,185 @@ describe('MinOrMax Machine Tests', () => {
 				}
 
 				expect(actor.getSnapshot().context.players).toHaveLength(4)
+			})
+		})
+
+		describe('Win Tracking', () => {
+			it('should initialize players with 0 wins', () => {
+				const actor = createActor(minOrMaxMachine)
+				actor.start()
+
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-1',
+					playerName: 'Alice',
+				})
+
+				expect(actor.getSnapshot().context.players[0].wins).toBe(0)
+
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-2',
+					playerName: 'Bob',
+				})
+
+				expect(actor.getSnapshot().context.players[1].wins).toBe(0)
+			})
+
+			it('should increment winner wins when game ends by exact threshold', () => {
+				const actor = createActor(minOrMaxMachine)
+				actor.start()
+
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-1',
+					playerName: 'Alice',
+				})
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-2',
+					playerName: 'Bob',
+				})
+				actor.send({type: 'SEED', seed: 'wins-exact-test'})
+				actor.send({type: 'START_GAME'})
+				actor.send({type: 'PILE_SHUFFLED'})
+				actor.send({type: 'CARDS_DEALT'})
+				actor.send({type: 'THRESHOLDS_SET'})
+				actor.send({type: 'WHEEL_SPUN', angle: 270})
+				actor.send({type: 'FIRST_CARD_PLAYED'})
+
+				for (let turn = 0; turn < 30; turn++) {
+					const snapshot = actor.getSnapshot()
+					if (snapshot.value === 'gameOver') break
+
+					const currentPlayerIndex = snapshot.context.currentPlayerIndex
+					const currentPlayer = snapshot.context.players[currentPlayerIndex]
+					const playableCard = currentPlayer.hand.find((card) => {
+						const topCard = snapshot.context.discardPile[0]
+						if (!topCard) return true
+						if (card.rank === 'A' || topCard.card.rank === 'A') return true
+						const wheelAngle = snapshot.context.wheelAngle
+						const wheelMode = wheelAngle >= 180 ? 'min' : 'max'
+						const cardValue = getCardOrder(card.rank)
+						const topValue = getCardOrder(topCard.card.rank)
+						if (wheelMode === 'max') {
+							return cardValue >= topValue
+						} else {
+							return cardValue <= topValue
+						}
+					})
+
+					if (!playableCard) break
+
+					actor.send({type: 'CHOOSE_CARD', cardId: playableCard.id})
+					if (playableCard.effect) {
+						actor.send({
+							type: 'ADD_EFFECT',
+							effect: {type: 'value-adder', value: 10, stacksRemaining: 1},
+						})
+					}
+					actor.send({type: 'PLAY_CARD'})
+
+					if (actor.getSnapshot().value !== 'gameOver') {
+						actor.send({type: 'END_TURN'})
+					}
+				}
+
+				if (actor.getSnapshot().value === 'gameOver') {
+					const finalContext = actor.getSnapshot().context
+					expect(finalContext.winner).not.toBe(null)
+					expect(finalContext.winner?.wins).toBe(1)
+
+					const loser = finalContext.losers[0]
+					expect(loser.wins).toBe(0)
+				}
+			})
+
+			it('should increment winner wins when opponent surrenders', () => {
+				const actor = createActor(minOrMaxMachine)
+				actor.start()
+
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-1',
+					playerName: 'Alice',
+				})
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-2',
+					playerName: 'Bob',
+				})
+				actor.send({type: 'SEED', seed: 'wins-surrender-test'})
+				actor.send({type: 'START_GAME'})
+				actor.send({type: 'PILE_SHUFFLED'})
+				actor.send({type: 'CARDS_DEALT'})
+				actor.send({type: 'THRESHOLDS_SET'})
+				actor.send({type: 'WHEEL_SPUN', angle: 270})
+				actor.send({type: 'FIRST_CARD_PLAYED'})
+
+				expect(actor.getSnapshot().context.players[0].wins).toBe(0)
+				expect(actor.getSnapshot().context.players[1].wins).toBe(0)
+
+				actor.send({type: 'SURRENDER'})
+
+				expect(actor.getSnapshot().value).toBe('gameOver')
+				const finalContext = actor.getSnapshot().context
+
+				expect(finalContext.winner?.id).toBe('player-2')
+				expect(finalContext.winner?.wins).toBe(1)
+
+				const surrenderedPlayer = finalContext.players.find(
+					(p) => p.id === 'player-1',
+				)
+				expect(surrenderedPlayer?.wins).toBe(0)
+			})
+
+			it('should preserve wins across rematch (PLAY_AGAIN)', () => {
+				const actor = createActor(minOrMaxMachine)
+				actor.start()
+
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-1',
+					playerName: 'Alice',
+				})
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-2',
+					playerName: 'Bob',
+				})
+				actor.send({type: 'SEED', seed: 'wins-rematch-test'})
+				actor.send({type: 'START_GAME'})
+				actor.send({type: 'PILE_SHUFFLED'})
+				actor.send({type: 'CARDS_DEALT'})
+				actor.send({type: 'THRESHOLDS_SET'})
+				actor.send({type: 'WHEEL_SPUN', angle: 270})
+				actor.send({type: 'FIRST_CARD_PLAYED'})
+
+				actor.send({type: 'SURRENDER'})
+
+				expect(actor.getSnapshot().value).toBe('gameOver')
+				const winnerIdAfterFirstGame = actor.getSnapshot().context.winner?.id
+
+				expect(
+					actor
+						.getSnapshot()
+						.context.players.find((p) => p.id === winnerIdAfterFirstGame)?.wins,
+				).toBe(1)
+
+				actor.send({type: 'PLAY_AGAIN'})
+
+				expect(actor.getSnapshot().value).toBe('lobby')
+
+				const winnerAfterRematch = actor
+					.getSnapshot()
+					.context.players.find((p) => p.id === winnerIdAfterFirstGame)
+				expect(winnerAfterRematch?.wins).toBe(1)
+
+				const loserAfterRematch = actor
+					.getSnapshot()
+					.context.players.find((p) => p.id !== winnerIdAfterFirstGame)
+				expect(loserAfterRematch?.wins).toBe(0)
 			})
 		})
 	})

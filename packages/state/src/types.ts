@@ -51,6 +51,7 @@ export type Player = {
 	name: string
 	isReady: boolean
 	hand: Card[]
+	wins: number
 }
 
 // Game Events - used for state machine transitions

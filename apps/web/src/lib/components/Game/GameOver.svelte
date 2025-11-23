@@ -1,10 +1,11 @@
 <script lang="ts">
 	import {Confetti} from 'svelte-confetti'
 	import type {MinOrMaxContext} from '@repo/state'
+	import PlayerList from './PlayerList.svelte'
 
 	type Props = {
 		gameState: MinOrMaxContext
-		player: {id: string; name: string}
+		player: {id: string}
 	}
 
 	let {gameState, player}: Props = $props()
@@ -31,10 +32,10 @@
 {/if}
 
 <section
-	class="bg-card/70 text-card-foreground border-border grid flex-col place-items-center gap-8 rounded-xl border p-8 shadow-sm backdrop-blur-lg"
+	class="bg-card/70 text-card-foreground border-border mb-8 grid flex-col place-items-center gap-8 rounded-xl border p-8 shadow-sm backdrop-blur-lg"
 >
 	{#if didWin}
-		<h2 class="text-4xl">A Winner is YOU!</h2>
+		<h2 class="text-center text-4xl">A Winner is YOU!</h2>
 
 		{#if reason === 'exact_threshold'}
 			<p class="text-xl">
@@ -51,7 +52,7 @@
 			<p class="text-muted-foreground">They gave up!</p>
 		{/if}
 	{:else}
-		<h2 class="text-4xl">Game Over</h2>
+		<h2 class="text-center text-4xl">Game Over</h2>
 		<p class="text-xl">You lost!</p>
 
 		{#if reason === 'exact_threshold'}
@@ -73,3 +74,9 @@
 		{/if}
 	{/if}
 </section>
+
+<PlayerList
+	class="mx-auto"
+	players={gameState.players}
+	ownPlayerId={player.id}
+/>

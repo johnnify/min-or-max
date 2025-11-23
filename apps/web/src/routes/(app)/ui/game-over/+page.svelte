@@ -13,7 +13,6 @@
 
 	const heroId = 'hero-player-id'
 	const villainId = 'villain-player-id'
-	const villain2Id = 'villain-2-player-id'
 
 	const basePlayers: Player[] = [
 		{
@@ -21,12 +20,14 @@
 			name: 'Hero',
 			isReady: true,
 			hand: [createCard('hearts', '7'), createCard('spades', 'Q')],
+			wins: 3,
 		},
 		{
 			id: villainId,
 			name: 'Villain',
 			isReady: true,
 			hand: [createCard('diamonds', 'K')],
+			wins: 2,
 		},
 	]
 

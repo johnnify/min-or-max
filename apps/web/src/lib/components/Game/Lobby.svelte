@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {type MinOrMaxContext} from '@repo/state'
 	import {Button} from '$lib/components/ui/button'
+	import PlayerList from './PlayerList.svelte'
 
 	type Props = {
 		gameState: MinOrMaxContext
@@ -18,15 +19,7 @@
 
 <section aria-labelledby="connected-players-heading">
 	<h2 id="connected-players-heading">Connected players</h2>
-	<ul>
-		{#each gameState.players as gamePlayer (gamePlayer.id)}
-			<!-- TODO: Nicer Player Item! -->
-			<li>
-				{gamePlayer.name}
-				{#if gamePlayer.id === player.id}(you!){/if}
-			</li>
-		{/each}
-	</ul>
+	<PlayerList players={gameState.players} ownPlayerId={player.id} />
 </section>
 <Button disabled={!areEnoughPlayersReady} onclick={handleGameStart}>
 	Start!

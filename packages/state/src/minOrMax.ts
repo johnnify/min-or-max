@@ -52,6 +52,7 @@ export const minOrMaxMachine = setup({
 						name: event.playerName,
 						isReady: true,
 						hand: [],
+						wins: 0,
 					},
 				]
 			},
@@ -328,7 +329,12 @@ export const minOrMaxMachine = setup({
 			losers: [],
 			reason: null,
 			players: ({context}) =>
-				context.players.map((p) => ({...p, isReady: true, hand: []})),
+				context.players.map((p) => ({
+					...p,
+					isReady: true,
+					hand: [],
+					wins: p.wins,
+				})),
 		}),
 	},
 	guards: {
