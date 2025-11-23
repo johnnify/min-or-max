@@ -170,7 +170,13 @@
 		}}
 	/>
 {:else if gamePhase === 'gameOver'}
-	<GameOver {gameState} {player} />
+	<GameOver
+		{gameState}
+		{player}
+		handleRematch={() => {
+			sendMessage({type: 'PLAY_AGAIN'})
+		}}
+	/>
 {:else}
 	<GameBoard {gameState} {actorSnapshot} {player} {sendMessage} />
 {/if}

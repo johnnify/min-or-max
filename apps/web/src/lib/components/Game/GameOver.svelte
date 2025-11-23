@@ -1,14 +1,16 @@
 <script lang="ts">
 	import {Confetti} from 'svelte-confetti'
 	import type {MinOrMaxContext} from '@repo/state'
+	import {Button} from '$lib/components/ui/button'
 	import PlayerList from './PlayerList.svelte'
 
 	type Props = {
 		gameState: MinOrMaxContext
 		player: {id: string}
+		handleRematch: () => void
 	}
 
-	let {gameState, player}: Props = $props()
+	let {gameState, player, handleRematch}: Props = $props()
 
 	let didWin = $derived(gameState.winner?.id === player.id)
 	let reason = $derived(gameState.reason)
@@ -80,3 +82,5 @@
 	players={gameState.players}
 	ownPlayerId={player.id}
 />
+
+<Button onclick={handleRematch}>Rematch!</Button>

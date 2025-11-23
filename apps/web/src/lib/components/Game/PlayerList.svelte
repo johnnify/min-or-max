@@ -33,8 +33,8 @@
 
 <div class={cn('flex w-full max-w-prose flex-col gap-6', className)}>
 	<Item.Group>
-		{#each orderedPlayers as player, index (player.id)}
-			<Item.Root>
+		{#each orderedPlayers as player (player.id)}
+			<Item.Root role="listitem" class="not-last:border-b-border rounded-none">
 				<Item.Media>
 					<Avatar.Root>
 						<Avatar.Fallback>{getInitials(player.name)}</Avatar.Fallback>
@@ -55,9 +55,6 @@
 				</Item.Content>
 				<Item.Actions><Badge variant="outline">ready</Badge></Item.Actions>
 			</Item.Root>
-			{#if index !== players.length - 1}
-				<Item.Separator />
-			{/if}
 		{/each}
 	</Item.Group>
 </div>

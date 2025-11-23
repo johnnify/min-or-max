@@ -20,8 +20,11 @@ test('multiplayer happy path', async ({browser}) => {
 	})
 	await expect(connectedPlayersRegion1).toBeVisible()
 	await expect(
-		connectedPlayersRegion1.getByRole('listitem').first(),
-	).toHaveText('Anonymous (you!)')
+		connectedPlayersRegion1
+			.getByRole('listitem')
+			.first()
+			.getByText('Anonymous (you!)'),
+	).toBeVisible()
 
 	const context2 = await browser.newContext()
 	const page2 = await context2.newPage()
@@ -37,16 +40,22 @@ test('multiplayer happy path', async ({browser}) => {
 	).toHaveLength(2)
 
 	await expect(
-		connectedPlayersRegion2.getByRole('listitem').first(),
-	).toHaveText('Anonymous')
-	await expect(connectedPlayersRegion2.getByRole('listitem').nth(1)).toHaveText(
-		'Anonymous (you!)',
-	)
+		connectedPlayersRegion2
+			.getByRole('listitem')
+			.first()
+			.getByText('Anonymous'),
+	).toBeVisible()
+	await expect(
+		connectedPlayersRegion2
+			.getByRole('listitem')
+			.nth(1)
+			.getByText('Anonymous (you!)'),
+	).toBeVisible()
 
 	// Page 1 can see the second player too now
-	await expect(connectedPlayersRegion1.getByRole('listitem').nth(1)).toHaveText(
-		'Anonymous',
-	)
+	await expect(
+		connectedPlayersRegion2.getByRole('listitem').nth(1).getByText('Anonymous'),
+	).toBeVisible()
 
 	// We can start the game!
 	const startButton = page1.getByRole('button', {name: 'start'})
@@ -134,8 +143,11 @@ test('room can be re-used after all players disconnect', async ({browser}) => {
 	})
 	await expect(connectedPlayersRegion1).toBeVisible()
 	await expect(
-		connectedPlayersRegion1.getByRole('listitem').first(),
-	).toHaveText('Anonymous (you!)')
+		connectedPlayersRegion1
+			.getByRole('listitem')
+			.first()
+			.getByText('Anonymous (you!)'),
+	).toBeVisible()
 
 	const context2 = await browser.newContext()
 	const page2 = await context2.newPage()
@@ -167,8 +179,11 @@ test('room can be re-used after all players disconnect', async ({browser}) => {
 
 	// Should see themselves in a fresh lobby
 	await expect(
-		connectedPlayersRegion3.getByRole('listitem').first(),
-	).toHaveText('Anonymous (you!)')
+		connectedPlayersRegion3
+			.getByRole('listitem')
+			.first()
+			.getByText('Anonymous (you!)'),
+	).toBeVisible()
 	await expect(connectedPlayersRegion3.getByRole('listitem')).toHaveCount(1)
 
 	// Should be able to add a second player

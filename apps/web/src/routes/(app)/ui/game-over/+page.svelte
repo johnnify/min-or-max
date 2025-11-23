@@ -62,6 +62,10 @@
 
 	const mockPlayer = {id: heroId, name: 'Hero'}
 
+	const mockHandleRematch = () => {
+		console.info('Rematch requested!')
+	}
+
 	const heroWonExactState = createMockGameState({
 		tally: 60,
 		maxThreshold: 60,
@@ -93,11 +97,23 @@
 	<Lead>Take a look at our Game Over screen in its various states!</Lead>
 
 	<SectionTitle>We Won TO THE MAX!</SectionTitle>
-	<GameOver gameState={heroWonExactState} player={mockPlayer} />
+	<GameOver
+		gameState={heroWonExactState}
+		player={mockPlayer}
+		handleRematch={mockHandleRematch}
+	/>
 
 	<SectionTitle>We Lost 😔</SectionTitle>
-	<GameOver gameState={heroLostBustState} player={mockPlayer} />
+	<GameOver
+		gameState={heroLostBustState}
+		player={mockPlayer}
+		handleRematch={mockHandleRematch}
+	/>
 
 	<SectionTitle>We Won! (Opponent Busted)</SectionTitle>
-	<GameOver gameState={heroWonBustState} player={mockPlayer} />
+	<GameOver
+		gameState={heroWonBustState}
+		player={mockPlayer}
+		handleRematch={mockHandleRematch}
+	/>
 </main>
