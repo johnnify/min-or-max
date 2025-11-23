@@ -1,34 +1,20 @@
 <script lang="ts">
-	import {WebSocket as ReconnectingWebSocket} from 'partysocket'
-	import {createActor} from 'xstate'
-	import {toast} from 'svelte-sonner'
-	import {
-		getPhaseFromState,
-		minOrMaxMachine,
-		isServerMessage,
-		isStateSnapshot,
-		isGameEvent,
-		isMinOrMaxSnapshot,
-		canCardBeatTopCard,
-		getModeFromWheelAngle,
-		type ClientMessage,
-		type MinOrMaxSnapshot,
-		type Player,
-		type Card,
-	} from '@repo/state'
-	import {Rng} from '@repo/rng'
-	import TickCircleIcon from '~icons/mdi/tick-circle-outline'
 	import MinIcon from '~icons/mdi/less-than'
 	import MaxIcon from '~icons/mdi/greater-than'
 
-	import {browser} from '$app/environment'
-	import {PUBLIC_API_URL} from '$env/static/public'
-	import Wheel from '$lib/components/Game/Wheel/Wheel.svelte'
-	import {Button} from '$lib/components/ui/button'
+	import {
+		type MinOrMaxContext,
+		type MinOrMaxSnapshot,
+		type Card,
+		type ClientMessage,
+		type Player,
+		canCardBeatTopCard,
+		getModeFromWheelAngle,
+	} from '@repo/state'
 	import Badge from '$lib/components/ui/badge/badge.svelte'
-	import {Spinner} from '$lib/components/ui/spinner'
+	import {Button} from '$lib/components/ui/button'
+	import Wheel from '$lib/components/Game/Wheel/Wheel.svelte'
 	import GameCard from '$lib/components/Game/GameCard/GameCard.svelte'
-	import Lobby from './Lobby.svelte'
 	import DiscardPile from './DiscardPile.svelte'
 	import Scoreboard from './Scoreboard.svelte'
 	import ChoiceDialog from './ChoiceDialog/ChoiceDialog.svelte'
@@ -36,123 +22,20 @@
 	import JackChoices from './ChoiceDialog/JackChoices.svelte'
 
 	type Props = {
-		roomId: string
+		gameState: MinOrMaxContext
+		actorSnapshot?: MinOrMaxSnapshot
 		player: {id: string; name: string}
-		seed: string | null
-	}
-	let {roomId, player, seed}: Props = $props()
-
-	let socket = $state<ReconnectingWebSocket | null>(null)
-	let isConnected = $state(false)
-
-	let minOrMaxActor = $state(createActor(minOrMaxMachine))
-	let actorSnapshot = $state<MinOrMaxSnapshot>()
-
-	$effect(() => {
-		const currentActor = minOrMaxActor
-		currentActor.start()
-		actorSnapshot = currentActor.getSnapshot()
-		const subscription = currentActor.subscribe((snapshot) => {
-			actorSnapshot = snapshot
-		})
-		return () => {
-			subscription.unsubscribe()
-			currentActor.stop()
-		}
-	})
-
-	const sendMessage = (message: ClientMessage) => {
-		if (socket) {
-			socket.send(JSON.stringify(message))
-		} else {
-			toast.error('Not yet connected to the game server...')
-		}
+		sendMessage: (message: ClientMessage) => void
 	}
 
-	$effect(() => {
-		if (!browser) return
-
-		const wsBaseUrl = PUBLIC_API_URL.replace(/^http/, 'ws')
-		const wsUrl = new URL(`/api/room/${roomId}`, wsBaseUrl)
-
-		if (seed) {
-			wsUrl.searchParams.set('seed', seed)
-		}
-
-		const ws = new ReconnectingWebSocket(wsUrl.toString())
-
-		socket = ws
-
-		ws.addEventListener('open', () => {
-			isConnected = true
-			ws.send(
-				JSON.stringify({
-					type: 'JOIN_GAME',
-					playerId: player.id,
-					playerName: player.name,
-				} satisfies ClientMessage),
-			)
-		})
-
-		ws.addEventListener('message', (event) => {
-			const data = JSON.parse(event.data as string)
-
-			if (!isServerMessage(data)) {
-				console.error('Invalid server message:', data)
-				return
-			}
-
-			if (isGameEvent(data)) {
-				console.info('Received game event:', data.event)
-				minOrMaxActor.send(data.event)
-			} else if (isStateSnapshot(data)) {
-				if (!isMinOrMaxSnapshot(data.state)) {
-					console.error('Invalid snapshot:', data.state)
-					return
-				}
-
-				data.state.context.rng = Rng.fromJSON(data.state.context.rng)
-
-				minOrMaxActor.stop()
-				minOrMaxActor = createActor(minOrMaxMachine, {
-					snapshot: data.state,
-				})
-				minOrMaxActor.start()
-				actorSnapshot = minOrMaxActor.getSnapshot()
-			} else if (data.type === 'CONNECTED') {
-				console.info('Connected as player:', data.playerId)
-			} else if (data.type === 'ERROR') {
-				toast.error(data.message)
-			}
-		})
-
-		ws.addEventListener('close', () => {
-			isConnected = false
-		})
-
-		ws.addEventListener('error', (err) => {
-			console.error('WebSocket error:', err)
-		})
-
-		return () => {
-			ws.close()
-			socket = null
-		}
-	})
-
-	let gamePhase = $derived(
-		actorSnapshot ? getPhaseFromState(actorSnapshot.value) : 'lobby',
-	)
-	let gameState = $derived(actorSnapshot?.context)
+	let {gameState, actorSnapshot, player, sendMessage}: Props = $props()
 
 	let topDiscardCard = $derived(
-		gameState && gameState.discardPile.length > 0
-			? gameState.discardPile[0]
-			: null,
+		gameState.discardPile.length > 0 ? gameState.discardPile[0] : null,
 	)
 
 	let {hero, villains} = $derived(
-		gameState?.players?.reduce<{hero: Player | null; villains: Player[]}>(
+		gameState.players.reduce<{hero: Player | null; villains: Player[]}>(
 			(acc, p) => {
 				if (p.id === player.id) {
 					acc.hero = p
@@ -162,12 +45,10 @@
 				return acc
 			},
 			{hero: null, villains: []},
-		) || {hero: null, villains: []},
+		),
 	)
 
 	const canPlayCard = (card: Card): boolean => {
-		if (!gameState) return false
-
 		return canCardBeatTopCard(
 			card,
 			topDiscardCard?.card || null,
@@ -176,20 +57,16 @@
 	}
 
 	let isCurrentPlayer = $derived(
-		gameState &&
-			gameState.currentPlayerIndex !== undefined &&
+		gameState.currentPlayerIndex !== undefined &&
 			gameState.players[gameState.currentPlayerIndex]?.id === player.id,
 	)
 
 	let canSpinWheel = $derived(
-		gamePhase === 'playing' &&
-			isCurrentPlayer &&
-			gameState?.hasSpunThisTurn === false,
+		isCurrentPlayer && gameState.hasSpunThisTurn === false,
 	)
 
 	let canEndTurn = $derived.by(() => {
-		if (!isCurrentPlayer || gamePhase !== 'playing') return false
-		if (!actorSnapshot) return false
+		if (!isCurrentPlayer || !actorSnapshot) return false
 
 		const stateValue = actorSnapshot.value
 		if (typeof stateValue === 'object' && 'playing' in stateValue) {
@@ -208,6 +85,7 @@
 
 	let isConfiguringEffect = $derived.by(() => {
 		if (!actorSnapshot) return false
+
 		const stateValue = actorSnapshot.value
 		if (typeof stateValue === 'object' && 'playing' in stateValue) {
 			const playingState = stateValue.playing
@@ -222,179 +100,142 @@
 		return false
 	})
 
-	let chosenCard = $derived(gameState?.chosenCard ?? null)
+	let chosenCard = $derived(gameState.chosenCard ?? null)
 
 	let mode = $derived(
-		gameState?.wheelAngle ? getModeFromWheelAngle(gameState.wheelAngle) : 'min',
+		gameState.wheelAngle ? getModeFromWheelAngle(gameState.wheelAngle) : 'min',
 	)
-
-	$effect(() => {
-		if (!isConnected) {
-			const timeout = setTimeout(() => {
-				toast.warning('Connection lost! Reconnecting...')
-			}, 5_000)
-
-			return () => {
-				clearTimeout(timeout)
-			}
-		}
-	})
 </script>
 
-<div class="mb-[5svh] flex justify-between gap-4">
-	<h1 class="text-muted-foreground">
-		Playroom {roomId}
-	</h1>
-	<Badge variant="outline">
-		{#if isConnected}
-			<TickCircleIcon /> Connected
-		{:else}
-			<Spinner /> Connecting...
-		{/if}
-	</Badge>
-</div>
+<ChoiceDialog
+	open={isConfiguringEffect && isCurrentPlayer && chosenCard !== null}
+>
+	{#if chosenCard?.rank === 'J'}
+		<JackChoices
+			card={chosenCard}
+			onChoice={(rank) => {
+				sendMessage({type: 'SEARCH_AND_DRAW', rank})
+				sendMessage({type: 'PLAY_CARD'})
+			}}
+		/>
+	{:else if chosenCard?.rank === 'A'}
+		<AceChoices
+			card={chosenCard}
+			onChoice={(addedValue) => {
+				sendMessage({
+					type: 'ADD_EFFECT',
+					effect: {
+						type: 'value-adder',
+						value: addedValue,
+						stacksRemaining: 1,
+					},
+				})
+				sendMessage({type: 'PLAY_CARD'})
+			}}
+		/>
+	{/if}
+</ChoiceDialog>
 
-{#if !gameState}
-	<Spinner class="size-5" />
-{:else if gamePhase === 'lobby'}
-	<Lobby
-		{gameState}
-		{player}
-		handleGameStart={() => {
-			sendMessage({type: 'START_GAME'})
-		}}
+<div class="space-y-4">
+	<Scoreboard
+		tally={gameState.tally}
+		maxThreshold={gameState.maxThreshold}
+		class="sticky top-(--header-height) z-200"
 	/>
-{:else if gamePhase === 'gameOver'}
-	<div>Game over! TODO: Who won?!</div>
-{:else}
-	<ChoiceDialog
-		open={isConfiguringEffect && isCurrentPlayer && chosenCard !== null}
-	>
-		{#if chosenCard?.rank === 'J'}
-			<JackChoices
-				card={chosenCard}
-				onChoice={(rank) => {
-					sendMessage({type: 'SEARCH_AND_DRAW', rank})
-					sendMessage({type: 'PLAY_CARD'})
+
+	<section class="grid gap-8 py-8">
+		<ol>
+			{#each villains as { id, hand }, index (id)}
+				<li>
+					<ul
+						class="flex justify-center gap-2"
+						aria-label="Villain {index + 1} hand"
+					>
+						{#each hand as card (card.id)}
+							<li>
+								<GameCard {card} hidden />
+							</li>
+						{/each}
+					</ul>
+				</li>
+			{/each}
+		</ol>
+
+		<div class="flex flex-col items-center">
+			<Wheel
+				angle={gameState.wheelAngle}
+				disabled={!canSpinWheel}
+				onclick={() => {
+					sendMessage({type: 'REQUEST_WHEEL_SPIN', force: 0.55})
 				}}
 			/>
-		{:else if chosenCard?.rank === 'A'}
-			<AceChoices
-				card={chosenCard}
-				onChoice={(addedValue) => {
-					sendMessage({
-						type: 'ADD_EFFECT',
-						effect: {
-							type: 'value-adder',
-							value: addedValue,
-							stacksRemaining: 1,
-						},
-					})
-					sendMessage({type: 'PLAY_CARD'})
-				}}
-			/>
-		{/if}
-	</ChoiceDialog>
 
-	<div class="space-y-4">
-		<Scoreboard tally={gameState.tally} maxThreshold={gameState.maxThreshold} />
+			{#if topDiscardCard}
+				<div class="flex items-center gap-4">
+					<DiscardPile pile={gameState.discardPile} />
+					<div class="flex flex-col items-center gap-4">
+						{#if mode === 'min'}
+							<MaxIcon class="size-32" />
+							{#if topDiscardCard.card.rank === 'A'}
+								<span
+									>play <strong>any card</strong> (ace counts as highest OR lowest)</span
+								>
+							{:else}
+								<span
+									>play <strong>{topDiscardCard.card.rank}</strong> or lower!</span
+								>
+							{/if}
+						{:else}
+							<MinIcon class="size-32" />
+							{#if topDiscardCard.card.rank === 'A'}
+								<span
+									>play <strong>any card</strong> (ace counts as highest OR lowest)</span
+								>
+							{:else}
+								<span
+									>play <strong>{topDiscardCard.card.rank}</strong> or higher!</span
+								>
+							{/if}
+						{/if}
+					</div>
+					<div
+						class="border-border aspect-5/7 w-32 border-2 border-dotted"
+					></div>
+				</div>
+			{/if}
+		</div>
 
-		<section class="grid gap-8 py-8">
-			<ol>
-				{#each villains as { id, hand }, index (id)}
+		<div class="text-center">
+			<p class="mb-2 flex flex-col items-center gap-1 text-sm">
+				{player.name} (you!)
+				{#if isCurrentPlayer}
+					<Badge>you're up!</Badge>
+				{:else}
+					<Badge variant="secondary">waiting...</Badge>
+				{/if}
+			</p>
+			<ul class="flex justify-center gap-2" aria-label="Hero hand">
+				{#each hero?.hand as card (card.id)}
 					<li>
-						<ul
-							class="flex justify-center gap-2"
-							aria-label="Villain {index + 1} hand"
+						<button
+							onclick={() => {
+								sendMessage({type: 'CHOOSE_CARD', cardId: card.id})
+							}}
+							disabled={!canPlayCard(card)}
 						>
-							{#each hand as card (card.id)}
-								<li>
-									<GameCard {card} hidden />
-								</li>
-							{/each}
-						</ul>
+							<GameCard {card} class={{'opacity-70': !canPlayCard(card)}} />
+						</button>
 					</li>
 				{/each}
-			</ol>
-
-			<div class="flex flex-col items-center">
-				<Wheel
-					angle={gameState.wheelAngle}
-					disabled={!canSpinWheel}
-					onclick={() => {
-						// TODO: Calculate force based on how long button is held
-						sendMessage({type: 'REQUEST_WHEEL_SPIN', force: 0.55})
-					}}
-				/>
-
-				{#if topDiscardCard}
-					<div class="flex items-center gap-4">
-						<DiscardPile pile={gameState.discardPile} />
-						<div class="flex flex-col items-center gap-4">
-							{#if mode === 'min'}
-								<MaxIcon class="size-32" />
-								{#if topDiscardCard.card.rank === 'A'}
-									<span
-										>play <strong>any card</strong> (ace counts as highest OR lowest)</span
-									>
-								{:else}
-									<span
-										>play <strong>{topDiscardCard.card.rank}</strong> or lower!</span
-									>
-								{/if}
-							{:else}
-								<MinIcon class="size-32" />
-								{#if topDiscardCard.card.rank === 'A'}
-									<span
-										>play <strong>any card</strong> (ace counts as highest OR lowest)</span
-									>
-								{:else}
-									<span
-										>play <strong>{topDiscardCard.card.rank}</strong> or higher!</span
-									>
-								{/if}
-							{/if}
-						</div>
-						<!-- TODO: Show your played card here -->
-						<div
-							class="border-border aspect-5/7 w-32 border-2 border-dotted"
-						></div>
-					</div>
-				{/if}
-			</div>
-
-			<div class="text-center">
-				<p class="mb-2 flex flex-col items-center gap-1 text-sm">
-					{player.name} (you!)
-					{#if isCurrentPlayer}
-						<Badge>you’re up!</Badge>
-					{:else}
-						<Badge variant="secondary">waiting...</Badge>
-					{/if}
-				</p>
-				<ul class="flex justify-center gap-2" aria-label="Hero hand">
-					{#each hero?.hand as card (card.id)}
-						<li>
-							<button
-								onclick={() => {
-									sendMessage({type: 'CHOOSE_CARD', cardId: card.id})
-								}}
-								disabled={!canPlayCard(card)}
-							>
-								<GameCard {card} class={{'opacity-70': !canPlayCard(card)}} />
-							</button>
-						</li>
-					{/each}
-				</ul>
-				<Button
-					onclick={() => {
-						sendMessage({type: 'END_TURN'})
-					}}
-					disabled={!canEndTurn}
-				>
-					End Turn
-				</Button>
-			</div>
-		</section>
-	</div>
-{/if}
+			</ul>
+			<Button
+				onclick={() => {
+					sendMessage({type: 'END_TURN'})
+				}}
+				disabled={!canEndTurn}
+			>
+				End Turn
+			</Button>
+		</div>
+	</section>
+</div>

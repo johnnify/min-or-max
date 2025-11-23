@@ -1,7 +1,7 @@
 <script lang="ts">
-	import {FieldSeparator} from '$lib/components/ui/field/index.js'
 	import Lead from '$lib/components/typography/Lead.svelte'
 	import PageTitle from '$lib/components/typography/PageTitle.svelte'
+	import {FieldSeparator} from '$lib/components/ui/field/index'
 	import RoomCodeForm from './RoomCodeForm.svelte'
 	import QuickplayForm from './QuickplayForm.svelte'
 </script>

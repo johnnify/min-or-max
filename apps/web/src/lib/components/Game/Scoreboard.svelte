@@ -1,19 +1,25 @@
 <script lang="ts">
 	import {useId} from 'bits-ui'
+	import type {HTMLAttributes} from 'svelte/elements'
 	import ThresholdMeter from './ThresholdMeter.svelte'
+	import {cn} from '$lib/utils'
 
-	type Props = {
+	type Props = Pick<HTMLAttributes<HTMLElement>, 'class'> & {
 		tally: number
 		maxThreshold: number
+		class?: string
 	}
 
-	let {tally, maxThreshold}: Props = $props()
+	let {tally, maxThreshold, class: className}: Props = $props()
 
 	const labelId = useId()
 </script>
 
 <aside
-	class="bg-card border-border grid gap-4 place-self-center rounded-md border p-8 font-mono text-2xl"
+	class={cn(
+		'bg-card border-border grid gap-4 place-self-center rounded-md border p-8 font-mono text-2xl',
+		className,
+	)}
 	style="grid-template-columns: auto 2ch 1fr;"
 	aria-labelledby={labelId}
 >
