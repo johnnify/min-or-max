@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {page} from '$app/state'
 	import PlayRoom from '$lib/components/Game/PlayRoom.svelte'
+	import Rules from '$lib/components/Game/Rules.svelte'
 
 	let {data} = $props()
 </script>
@@ -13,4 +14,8 @@
 			seed={data.seed}
 		/>
 	{/if}
+
+	<div class="mt-32">
+		<Rules />
+	</div>
 </main>

@@ -35,9 +35,7 @@ test('multiplayer happy path', async ({browser}) => {
 		name: 'Connected players',
 	})
 	await expect(connectedPlayersRegion2).toBeVisible()
-	expect(
-		await connectedPlayersRegion2.getByRole('listitem').all(),
-	).toHaveLength(2)
+	await expect(connectedPlayersRegion2.getByRole('listitem')).toHaveCount(2)
 
 	await expect(
 		connectedPlayersRegion2
@@ -234,9 +232,7 @@ test('can pass turns without playing a card', async ({browser}) => {
 		name: 'Connected players',
 	})
 	await expect(connectedPlayersRegion2).toBeVisible()
-	expect(
-		await connectedPlayersRegion2.getByRole('listitem').all(),
-	).toHaveLength(2)
+	await expect(connectedPlayersRegion2.getByRole('listitem')).toHaveCount(2)
 
 	// We can start the game!
 	const startButton = page1.getByRole('button', {name: 'start'})

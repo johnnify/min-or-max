@@ -19,7 +19,7 @@
 		"@axe-core/playwright": "^4.11.0",
 		"@fontsource-variable/montserrat": "^5.2.8",
 		"@fontsource-variable/sixtyfour": "^5.2.8",
-		"@iconify/json": "^2.2.409",
+		"@iconify/json": "^2.2.410",
 		"@internationalized/date": "^3.10.0",
 		"@playwright/test": "^1.56.1",
 		"@repo/rng": "workspace:*",
@@ -56,7 +56,7 @@
 		"vitest": "catalog:",
 		"wrangler": "catalog:",
 		"xstate": "catalog:",
-		"zod": "^4.1.12"
+		"zod": "^4.1.13"
 	},
 	"type": "module",
 	"engines": {

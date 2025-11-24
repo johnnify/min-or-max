@@ -21,6 +21,7 @@
 	<h2 id="connected-players-heading">Connected players</h2>
 	<PlayerList players={gameState.players} ownPlayerId={player.id} />
 </section>
+
 <Button disabled={!areEnoughPlayersReady} onclick={handleGameStart}>
 	Start!
 </Button>

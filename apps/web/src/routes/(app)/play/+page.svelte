@@ -4,6 +4,7 @@
 	import {FieldSeparator} from '$lib/components/ui/field/index'
 	import RoomCodeForm from './RoomCodeForm.svelte'
 	import QuickplayForm from './QuickplayForm.svelte'
+	import Rules from '$lib/components/Game/Rules.svelte'
 </script>
 
 <main class="container grid gap-8">
@@ -14,11 +15,13 @@
 		lobby!
 	</Lead>
 
-	<section class="grid max-w-prose gap-8">
+	<section class="mb-24 grid max-w-prose gap-8">
 		<QuickplayForm />
 
 		<FieldSeparator>or</FieldSeparator>
 
 		<RoomCodeForm />
 	</section>
+
+	<Rules />
 </main>
