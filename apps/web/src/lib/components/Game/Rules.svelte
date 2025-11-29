@@ -121,9 +121,8 @@
 		</li>
 		<li>
 			Playing a <KingCardIcon class="inline-block size-8" /> has the
-			<strong>enlist effect</strong>: Without seeing your opponents’ cards,
-			choose one to
-			<strong>ENLIST</strong>. It’s now yours!
+			<strong>bodyguard effect</strong>: You choose one of your number cards to
+			<strong>send along</strong> with your King!
 		</li>
 	</ul>
 </section>

@@ -194,6 +194,7 @@ describe('determineAutoPlayAction', () => {
 		name,
 		isReady: true,
 		hand,
+		wins: 0,
 	})
 
 	const createContext = (

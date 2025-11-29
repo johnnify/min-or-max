@@ -10,6 +10,7 @@
 		type Player,
 		canCardBeatTopCard,
 		getModeFromWheelAngle,
+		getPlayerTurnState,
 	} from '@repo/state'
 	import Badge from '$lib/components/ui/badge/badge.svelte'
 	import {Button} from '$lib/components/ui/button'
@@ -21,6 +22,7 @@
 	import AceChoices from './ChoiceDialog/AceChoices.svelte'
 	import JackChoices from './ChoiceDialog/JackChoices.svelte'
 	import QueenChoices from './ChoiceDialog/QueenChoices.svelte'
+	import KingChoices from './ChoiceDialog/KingChoices.svelte'
 
 	type Props = {
 		gameState: MinOrMaxContext
@@ -66,40 +68,18 @@
 		isCurrentPlayer && gameState.hasSpunThisTurn === false,
 	)
 
-	let canEndTurn = $derived.by(() => {
-		if (!isCurrentPlayer || !actorSnapshot) return false
+	let playerTurnState = $derived(
+		actorSnapshot ? getPlayerTurnState(actorSnapshot.value) : null,
+	)
 
-		const stateValue = actorSnapshot.value
-		if (typeof stateValue === 'object' && 'playing' in stateValue) {
-			const playingState = stateValue.playing
-			if (
-				typeof playingState === 'object' &&
-				'playerTurn' in playingState &&
-				playingState.playerTurn !== 'processingCard' &&
-				playingState.playerTurn !== 'configuringEffect'
-			) {
-				return true
-			}
-		}
-		return false
-	})
+	let canEndTurn = $derived(
+		isCurrentPlayer &&
+			playerTurnState !== null &&
+			playerTurnState !== 'processingCard' &&
+			playerTurnState !== 'configuringEffect',
+	)
 
-	let isConfiguringEffect = $derived.by(() => {
-		if (!actorSnapshot) return false
-
-		const stateValue = actorSnapshot.value
-		if (typeof stateValue === 'object' && 'playing' in stateValue) {
-			const playingState = stateValue.playing
-			if (
-				typeof playingState === 'object' &&
-				'playerTurn' in playingState &&
-				playingState.playerTurn === 'configuringEffect'
-			) {
-				return true
-			}
-		}
-		return false
-	})
+	let isConfiguringEffect = $derived(playerTurnState === 'configuringEffect')
 
 	let chosenCard = $derived(gameState.chosenCard ?? null)
 
@@ -139,6 +119,14 @@
 						stacksRemaining: 1,
 					},
 				})
+				sendMessage({type: 'PLAY_CARD'})
+			}}
+		/>
+	{:else if chosenCard?.rank === 'K'}
+		<KingChoices
+			hand={hero?.hand ?? []}
+			onChoice={(cardId) => {
+				sendMessage({type: 'BODYGUARD_CARD', cardId})
 				sendMessage({type: 'PLAY_CARD'})
 			}}
 		/>

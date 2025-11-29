@@ -2,7 +2,12 @@ import {createActor} from 'xstate'
 import {describe, it, expect} from 'vitest'
 import {minOrMaxMachine} from './minOrMax'
 import {Rng} from '@repo/rng'
-import {getCardOrder, getModeFromWheelAngle, calculateSpin} from './utils'
+import {
+	getCardOrder,
+	getModeFromWheelAngle,
+	calculateSpin,
+	createCard,
+} from './utils'
 import type {Card} from './types'
 
 const findValidCard = (
@@ -1713,6 +1718,226 @@ describe('MinOrMax Machine Tests', () => {
 							).toBeDefined()
 						}
 					}
+				})
+
+				it('should skip configuringEffect and play Queen directly when opponents have no cards', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+
+					actor.send({
+						type: 'PLAYER_JOINED',
+						playerId: 'player-1',
+						playerName: 'Alice',
+					})
+					actor.send({
+						type: 'PLAYER_JOINED',
+						playerId: 'player-2',
+						playerName: 'Bob',
+					})
+					actor.send({type: 'PLAYER_READY', playerId: 'player-1'})
+					actor.send({type: 'PLAYER_READY', playerId: 'player-2'})
+					actor.send({type: 'START_GAME'})
+					actor.send({type: 'PILE_SHUFFLED'})
+					actor.send({type: 'CARDS_DEALT'})
+					actor.send({type: 'THRESHOLDS_SET'})
+					actor.send({type: 'WHEEL_SPUN', angle: 90})
+					actor.send({type: 'FIRST_CARD_PLAYED'})
+
+					const queenCard = createCard('hearts', 'Q')
+
+					const contextWithEmptyOpponentHands = {
+						...actor.getSnapshot().context,
+						players: actor
+							.getSnapshot()
+							.context.players.map((p, i) =>
+								i === 0
+									? {...p, hand: [queenCard, createCard('spades', '5')]}
+									: {...p, hand: []},
+							),
+					}
+
+					const snapshot = actor.getSnapshot()
+					const testActor = createActor(minOrMaxMachine, {
+						snapshot: {
+							...snapshot,
+							context: contextWithEmptyOpponentHands,
+						} as typeof snapshot,
+					})
+					testActor.start()
+
+					const tallyBefore = testActor.getSnapshot().context.tally
+
+					testActor.send({type: 'CHOOSE_CARD', cardId: queenCard.id})
+
+					expect(testActor.getSnapshot().value).not.toMatchObject({
+						playing: {playerTurn: 'configuringEffect'},
+					})
+
+					const context = testActor.getSnapshot().context
+					expect(context.discardPile[0].card.rank).toBe('Q')
+					expect(context.tally).toBe(tallyBefore + 10)
+
+					const updatedPlayer = context.players[0]
+					expect(
+						updatedPlayer.hand.find((c) => c.id === queenCard.id),
+					).toBeUndefined()
+				})
+
+				it('should play bodyguard card first, then King on top when using Bodyguard effect', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'king-bodyguard-test')
+
+					const kingCard = actor
+						.getSnapshot()
+						.context.players[0].hand.find(
+							(card) => card.rank === 'K' && card.effect?.type === 'choice',
+						)
+
+					if (kingCard) {
+						const tallyBefore = actor.getSnapshot().context.tally
+						const currentPlayer = actor.getSnapshot().context.players[0]
+						const bodyguardCard = currentPlayer.hand.find(
+							(c) =>
+								c.id !== kingCard.id && !['A', 'J', 'Q', 'K'].includes(c.rank),
+						)
+
+						if (bodyguardCard) {
+							const handBefore = currentPlayer.hand.length
+
+							actor.send({type: 'CHOOSE_CARD', cardId: kingCard.id})
+
+							expect(actor.getSnapshot().value).toMatchObject({
+								playing: {playerTurn: 'configuringEffect'},
+							})
+
+							actor.send({
+								type: 'BODYGUARD_CARD',
+								cardId: bodyguardCard.id,
+							})
+
+							actor.send({type: 'PLAY_CARD'})
+
+							const context = actor.getSnapshot().context
+							expect(context.discardPile[0].card).toEqual(kingCard)
+							expect(context.discardPile[0].playedValue).toBe(10)
+							expect(context.discardPile[1].card).toEqual(bodyguardCard)
+
+							const bodyguardValue = parseInt(bodyguardCard.rank, 10)
+							expect(context.tally).toBe(tallyBefore + bodyguardValue + 10)
+
+							const updatedPlayer = context.players[0]
+							expect(updatedPlayer.hand.length).toBe(handBefore - 2)
+							expect(
+								updatedPlayer.hand.find((c) => c.id === kingCard.id),
+							).toBeUndefined()
+							expect(
+								updatedPlayer.hand.find((c) => c.id === bodyguardCard.id),
+							).toBeUndefined()
+						}
+					}
+				})
+
+				it('should not allow face cards or Aces as bodyguard cards', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'king-bodyguard-invalid-test')
+
+					const kingCard = actor
+						.getSnapshot()
+						.context.players[0].hand.find(
+							(card) => card.rank === 'K' && card.effect?.type === 'choice',
+						)
+
+					if (kingCard) {
+						const currentPlayer = actor.getSnapshot().context.players[0]
+						const faceCard = currentPlayer.hand.find(
+							(c) => c.id !== kingCard.id && ['A', 'J', 'Q'].includes(c.rank),
+						)
+
+						if (faceCard) {
+							const handBefore = currentPlayer.hand.length
+
+							actor.send({type: 'CHOOSE_CARD', cardId: kingCard.id})
+
+							actor.send({
+								type: 'BODYGUARD_CARD',
+								cardId: faceCard.id,
+							})
+
+							const updatedPlayer = actor.getSnapshot().context.players[0]
+							expect(updatedPlayer.hand.length).toBe(handBefore)
+							expect(
+								updatedPlayer.hand.find((c) => c.id === faceCard.id),
+							).toBeDefined()
+						}
+					}
+				})
+
+				it('should skip configuringEffect and play King directly when no bodyguard cards available', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+
+					actor.send({
+						type: 'PLAYER_JOINED',
+						playerId: 'player-1',
+						playerName: 'Alice',
+					})
+					actor.send({
+						type: 'PLAYER_JOINED',
+						playerId: 'player-2',
+						playerName: 'Bob',
+					})
+					actor.send({type: 'PLAYER_READY', playerId: 'player-1'})
+					actor.send({type: 'PLAYER_READY', playerId: 'player-2'})
+					actor.send({type: 'START_GAME'})
+					actor.send({type: 'PILE_SHUFFLED'})
+					actor.send({type: 'CARDS_DEALT'})
+					actor.send({type: 'THRESHOLDS_SET'})
+					actor.send({type: 'WHEEL_SPUN', angle: 90})
+					actor.send({type: 'FIRST_CARD_PLAYED'})
+
+					const kingCard = createCard('hearts', 'K')
+					const aceCard = createCard('spades', 'A')
+					const jackCard = createCard('diamonds', 'J')
+					const queenCard = createCard('clubs', 'Q')
+
+					const contextWithOnlyFaceCards = {
+						...actor.getSnapshot().context,
+						players: actor
+							.getSnapshot()
+							.context.players.map((p, i) =>
+								i === 0
+									? {...p, hand: [kingCard, aceCard, jackCard, queenCard]}
+									: p,
+							),
+					}
+
+					const snapshot = actor.getSnapshot()
+					const testActor = createActor(minOrMaxMachine, {
+						snapshot: {
+							...snapshot,
+							context: contextWithOnlyFaceCards,
+						} as typeof snapshot,
+					})
+					testActor.start()
+
+					const tallyBefore = testActor.getSnapshot().context.tally
+
+					testActor.send({type: 'CHOOSE_CARD', cardId: kingCard.id})
+
+					expect(testActor.getSnapshot().value).not.toMatchObject({
+						playing: {playerTurn: 'configuringEffect'},
+					})
+
+					const context = testActor.getSnapshot().context
+					expect(context.discardPile[0].card.rank).toBe('K')
+					expect(context.tally).toBe(tallyBefore + 10)
+
+					const updatedPlayer = context.players[0]
+					expect(
+						updatedPlayer.hand.find((c) => c.id === kingCard.id),
+					).toBeUndefined()
 				})
 			})
 		})

@@ -30,6 +30,12 @@ export const slayCardEffect: CardEffect = {
 	description: 'Choose an opponent card to slay!',
 }
 
+export const bodyguardCardEffect: CardEffect = {
+	type: 'choice',
+	name: 'Bodyguard',
+	description: 'Choose a number card from your hand to play first!',
+}
+
 export const createCard = (
 	suit: CardSuit,
 	rank: CardRank,
@@ -51,6 +57,10 @@ export const createCard = (
 
 	if (rank === 'Q') {
 		return {id, suit, rank, effect: slayCardEffect}
+	}
+
+	if (rank === 'K') {
+		return {id, suit, rank, effect: bodyguardCardEffect}
 	}
 
 	return {id, suit, rank}
@@ -156,6 +166,36 @@ export const getPhaseFromState = (
 	return 'lobby'
 }
 
+export type PlayerTurnState =
+	| 'awaitingAction'
+	| 'processingCard'
+	| 'configuringEffect'
+	| 'readyToPlay'
+	| 'postCardPlay'
+
+export type PlayingStateValue = {
+	playing: {playerTurn: PlayerTurnState}
+}
+
+export const isPlayingState = (
+	stateValue: MinOrMaxSnapshot['value'],
+): stateValue is PlayingStateValue =>
+	typeof stateValue === 'object' &&
+	stateValue !== null &&
+	'playing' in stateValue &&
+	typeof stateValue.playing === 'object' &&
+	stateValue.playing !== null &&
+	'playerTurn' in stateValue.playing
+
+export const getPlayerTurnState = (
+	stateValue: MinOrMaxSnapshot['value'],
+): PlayerTurnState | null => {
+	if (isPlayingState(stateValue)) {
+		return stateValue.playing.playerTurn
+	}
+	return null
+}
+
 export type AutoPlayAction =
 	| {type: 'play_card'; cardId: string}
 	| {type: 'spin'}
@@ -194,3 +234,5 @@ export const determineAutoPlayAction = (
 
 	return {type: 'end_turn'}
 }
+
+export const canBeBodyguardCard = (card: Card): boolean => !card.effect

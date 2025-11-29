@@ -7,6 +7,7 @@ import {
 	calculateCurrentPlayerWins,
 	calculatePreviousPlayerWins,
 	canCardBeatTopCard,
+	canBeBodyguardCard,
 } from './utils'
 
 export type MinOrMaxContext = {
@@ -243,6 +244,42 @@ export const minOrMaxMachine = setup({
 				players: updatedPlayers,
 			}
 		}),
+		bodyguardCard: assign(({context, event}) => {
+			if (event.type !== 'BODYGUARD_CARD') return {}
+
+			const currentPlayer = context.players[context.currentPlayerIndex]
+			const bodyguardCard = currentPlayer.hand.find(
+				(card) => card.id === event.cardId,
+			)
+
+			if (!bodyguardCard) return {}
+
+			// sanity check whether this can actually be a bodyguard card
+			if (!canBeBodyguardCard(bodyguardCard)) return {}
+
+			const updatedPlayers = context.players.map((player, index) => {
+				if (index === context.currentPlayerIndex) {
+					return {
+						...player,
+						hand: player.hand.filter((card) => card.id !== event.cardId),
+					}
+				}
+				return player
+			})
+
+			const cardValue = getCardValue(bodyguardCard.rank)
+			const playedCard: PlayedCard = {
+				card: bodyguardCard,
+				playedValue: cardValue,
+				playedBy: currentPlayer.id,
+			}
+
+			return {
+				players: updatedPlayers,
+				discardPile: [playedCard, ...context.discardPile],
+				tally: context.tally + cardValue,
+			}
+		}),
 		applyWheelSpin: assign({
 			wheelAngle: ({event}) => {
 				if (event.type !== 'WHEEL_SPUN') throw new Error('Invalid event type')
@@ -377,7 +414,24 @@ export const minOrMaxMachine = setup({
 			return canCardBeatTopCard(chosenCard, topCard, context.wheelAngle)
 		},
 		chosenCardHasEffect: ({context}) => {
-			return context.chosenCard?.effect !== undefined
+			const chosenCard = context.chosenCard
+			if (!chosenCard?.effect) return false
+
+			if (chosenCard.rank === 'K') {
+				const currentPlayer = context.players[context.currentPlayerIndex]
+				const hasBodyguardCard = currentPlayer.hand.some(canBeBodyguardCard)
+				return hasBodyguardCard
+			}
+
+			if (chosenCard.rank === 'Q') {
+				const currentPlayer = context.players[context.currentPlayerIndex]
+				const hasSlayableCard = context.players.some(
+					(player) => player.id !== currentPlayer.id && player.hand.length > 0,
+				)
+				return hasSlayableCard
+			}
+
+			return true
 		},
 		hasNotSpunThisTurn: ({context}) => !context.hasSpunThisTurn,
 		isExactThreshold: ({context}) => {
@@ -532,6 +586,9 @@ export const minOrMaxMachine = setup({
 								},
 								SLAY_CARD: {
 									actions: 'slayCard',
+								},
+								BODYGUARD_CARD: {
+									actions: 'bodyguardCard',
 								},
 								PLAY_CARD: {
 									target: 'postCardPlay',

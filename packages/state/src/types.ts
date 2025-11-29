@@ -79,6 +79,7 @@ export type PlayingEvent =
 	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
 	| {type: 'SEARCH_AND_DRAW'; rank: FaceCardRank}
 	| {type: 'SLAY_CARD'; targetPlayerId: string; targetCardId: string}
+	| {type: 'BODYGUARD_CARD'; cardId: string}
 	| {type: 'PLAY_CARD'}
 	| {type: 'END_TURN'}
 	| {type: 'SURRENDER'}
@@ -99,6 +100,7 @@ export type ClientMessage =
 	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
 	| {type: 'SEARCH_AND_DRAW'; rank: FaceCardRank}
 	| {type: 'SLAY_CARD'; targetPlayerId: string; targetCardId: string}
+	| {type: 'BODYGUARD_CARD'; cardId: string}
 	| {type: 'PLAY_CARD'}
 	| {type: 'END_TURN'}
 	| {type: 'SURRENDER'}
