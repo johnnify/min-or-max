@@ -237,7 +237,7 @@ export class GameRoom extends Server<Env> {
 		let connectionState = connection.state as ConnectionState | null
 
 		if (data.type === 'PLAY_AGAIN') {
-			await this.resetToLobby()
+			await this.handleRematch()
 			return
 		}
 
@@ -436,30 +436,7 @@ export class GameRoom extends Server<Env> {
 					timestamp: performance.now(),
 				})
 
-				const setupContext = this.currentActor.getSnapshot().context
-				const spinDegrees = calculateSpin(0.8, setupContext.rng)
-				const setupAngle = setupContext.wheelAngle + spinDegrees
-				const events: GameEvent[] = [
-					{type: 'PILE_SHUFFLED'},
-					{type: 'CARDS_DEALT'},
-					{type: 'THRESHOLDS_SET'},
-					{type: 'WHEEL_SPUN', angle: setupAngle},
-					{type: 'FIRST_CARD_PLAYED'},
-				]
-
-				for (const event of events) {
-					this.broadcastEvent(event)
-					this.currentActor.send(event)
-				}
-
-				const finalSnapshot = this.currentActor.getSnapshot()
-				this.broadcast(
-					JSON.stringify({
-						type: 'STATE_SNAPSHOT',
-						state: finalSnapshot,
-						sequenceId: this.getEventCounter(),
-					} satisfies ServerMessage),
-				)
+				await this.runSetupSequence()
 			}
 		}
 
@@ -474,6 +451,35 @@ export class GameRoom extends Server<Env> {
 			)
 			this.setLastPlayerIndex(newPlayerIndex)
 		}
+	}
+
+	private async runSetupSequence() {
+		if (!this.currentActor) return
+
+		const setupContext = this.currentActor.getSnapshot().context
+		const spinDegrees = calculateSpin(0.8, setupContext.rng)
+		const setupAngle = setupContext.wheelAngle + spinDegrees
+		const events: GameEvent[] = [
+			{type: 'PILE_SHUFFLED'},
+			{type: 'CARDS_DEALT'},
+			{type: 'THRESHOLDS_SET'},
+			{type: 'WHEEL_SPUN', angle: setupAngle},
+			{type: 'FIRST_CARD_PLAYED'},
+		]
+
+		for (const event of events) {
+			this.broadcastEvent(event)
+			this.currentActor.send(event)
+		}
+
+		const finalSnapshot = this.currentActor.getSnapshot()
+		this.broadcast(
+			JSON.stringify({
+				type: 'STATE_SNAPSHOT',
+				state: finalSnapshot,
+				sequenceId: this.getEventCounter(),
+			} satisfies ServerMessage),
+		)
 	}
 
 	private async saveState() {
@@ -539,39 +545,25 @@ export class GameRoom extends Server<Env> {
 		}
 	}
 
-	private async resetToLobby() {
+	private async handleRematch() {
 		if (!this.currentActor || !this.playerRegistry) return
 
 		const playAgainEvent: GameEvent = {type: 'PLAY_AGAIN'}
 		this.broadcastEvent(playAgainEvent)
 		this.currentActor.send(playAgainEvent)
 
-		const registeredPlayers = Array.from(this.playerRegistry.values())
-		for (const player of registeredPlayers) {
-			const joinEvent: GameEvent = {
-				type: 'PLAYER_JOINED',
-				playerId: player.playerId,
-				playerName: player.playerName,
-			}
-			this.broadcastEvent(joinEvent)
-			this.currentActor.send(joinEvent)
+		const startGameEvent: GameEvent = {type: 'START_GAME'}
+		this.broadcastEvent(startGameEvent)
+		this.currentActor.send(startGameEvent)
 
-			const readyEvent: GameEvent = {
-				type: 'PLAYER_READY',
-				playerId: player.playerId,
-			}
-			this.broadcastEvent(readyEvent)
-			this.currentActor.send(readyEvent)
-		}
-
+		await this.notifyMatchmaker('unregister')
+		await this.runSetupSequence()
 		await this.saveState()
 
-		await this.notifyMatchmaker('register', registeredPlayers.length)
-
 		this.storeTelemetryEvent({
-			type: 'GAME_RESET',
+			type: 'GAME_REMATCH',
 			playerId: null,
-			data: JSON.stringify({playerCount: registeredPlayers.length}),
+			data: JSON.stringify({playerCount: this.playerRegistry.size}),
 			timestamp: performance.now(),
 		})
 	}

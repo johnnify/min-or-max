@@ -2448,6 +2448,58 @@ describe('MinOrMax Machine Tests', () => {
 					.context.players.find((p) => p.id !== winnerIdAfterFirstGame)
 				expect(loserAfterRematch?.wins).toBe(0)
 			})
+
+			it('should allow immediate START_GAME after PLAY_AGAIN since players are already ready', () => {
+				const actor = createActor(minOrMaxMachine)
+				actor.start()
+
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-1',
+					playerName: 'Alice',
+				})
+				actor.send({
+					type: 'PLAYER_JOINED',
+					playerId: 'player-2',
+					playerName: 'Bob',
+				})
+				actor.send({type: 'SEED', seed: 'rematch-auto-start-test'})
+				actor.send({type: 'START_GAME'})
+				actor.send({type: 'PILE_SHUFFLED'})
+				actor.send({type: 'CARDS_DEALT'})
+				actor.send({type: 'THRESHOLDS_SET'})
+				actor.send({type: 'WHEEL_SPUN', angle: 270})
+				actor.send({type: 'FIRST_CARD_PLAYED'})
+
+				expect(actor.getSnapshot().value).toMatchObject({
+					playing: {playerTurn: 'awaitingAction'},
+				})
+
+				actor.send({type: 'SURRENDER'})
+				expect(actor.getSnapshot().value).toBe('gameOver')
+
+				actor.send({type: 'PLAY_AGAIN'})
+				expect(actor.getSnapshot().value).toBe('lobby')
+
+				const players = actor.getSnapshot().context.players
+				expect(players).toHaveLength(2)
+				expect(players.every((p) => p.isReady)).toBe(true)
+
+				actor.send({type: 'START_GAME'})
+				expect(actor.getSnapshot().value).toMatchObject({
+					setup: 'shufflingPile',
+				})
+
+				actor.send({type: 'PILE_SHUFFLED'})
+				actor.send({type: 'CARDS_DEALT'})
+				actor.send({type: 'THRESHOLDS_SET'})
+				actor.send({type: 'WHEEL_SPUN', angle: 180})
+				actor.send({type: 'FIRST_CARD_PLAYED'})
+
+				expect(actor.getSnapshot().value).toMatchObject({
+					playing: {playerTurn: 'awaitingAction'},
+				})
+			})
 		})
 	})
 })
