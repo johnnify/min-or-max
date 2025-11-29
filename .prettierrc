@@ -6,7 +6,7 @@
 	"bracketSpacing": false,
 	"plugins": [
 		"@prettier/plugin-oxc",
-		"prettier-plugin-svelte",
-		"prettier-plugin-tailwindcss"
+		"prettier-plugin-tailwindcss",
+		"prettier-plugin-svelte"
 	]
 }

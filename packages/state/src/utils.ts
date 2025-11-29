@@ -24,6 +24,12 @@ export const findFaceCardEffect: CardEffect = {
 	description: 'Try to draw your choice of a date!',
 }
 
+export const slayCardEffect: CardEffect = {
+	type: 'choice',
+	name: 'Slay',
+	description: 'Choose an opponent card to slay!',
+}
+
 export const createCard = (
 	suit: CardSuit,
 	rank: CardRank,
@@ -41,6 +47,10 @@ export const createCard = (
 
 	if (rank === 'J') {
 		return {id, suit, rank, effect: findFaceCardEffect}
+	}
+
+	if (rank === 'Q') {
+		return {id, suit, rank, effect: slayCardEffect}
 	}
 
 	return {id, suit, rank}

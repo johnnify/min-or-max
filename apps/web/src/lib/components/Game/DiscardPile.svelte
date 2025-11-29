@@ -9,7 +9,11 @@
 	let {pile}: Props = $props()
 </script>
 
-<ul aria-label="Discard Pile" class="stack-layout isolate place-content-start">
+<ul
+	aria-label="Discard Pile"
+	class="stack-layout isolate place-content-center w-full"
+	style="--card-count: {pile.length}"
+>
 	{#each pile as { card }, index (card.id)}
 		<li style="--index: {index}">
 			<GameCard {card} />
@@ -18,7 +22,12 @@
 </ul>
 
 <style>
+	ul {
+		padding-left: calc(calc(var(--card-count) - 1) * 8rem * 0.3);
+	}
+
 	ul li {
 		z-index: calc(100 - var(--index));
+		margin-left: calc(var(--index) * -30%);
 	}
 </style>

@@ -223,6 +223,26 @@ export const minOrMaxMachine = setup({
 				drawPile: newDrawPile,
 			}
 		}),
+		slayCard: assign(({context, event}) => {
+			if (event.type !== 'SLAY_CARD') return {}
+
+			const currentPlayer = context.players[context.currentPlayerIndex]
+			if (event.targetPlayerId === currentPlayer.id) return {}
+
+			const updatedPlayers = context.players.map((player) => {
+				if (player.id === event.targetPlayerId) {
+					return {
+						...player,
+						hand: player.hand.filter((card) => card.id !== event.targetCardId),
+					}
+				}
+				return player
+			})
+
+			return {
+				players: updatedPlayers,
+			}
+		}),
 		applyWheelSpin: assign({
 			wheelAngle: ({event}) => {
 				if (event.type !== 'WHEEL_SPUN') throw new Error('Invalid event type')
@@ -509,6 +529,9 @@ export const minOrMaxMachine = setup({
 								},
 								SEARCH_AND_DRAW: {
 									actions: 'searchAndDraw',
+								},
+								SLAY_CARD: {
+									actions: 'slayCard',
 								},
 								PLAY_CARD: {
 									target: 'postCardPlay',

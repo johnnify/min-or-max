@@ -13,11 +13,11 @@
 		"sanity": "turbo test check lint"
 	},
 	"devDependencies": {
-		"@prettier/plugin-oxc": "^0.0.5",
+		"@prettier/plugin-oxc": "^0.1.2",
 		"@types/node": "catalog:",
-		"oxlint": "^1.29.0",
-		"oxlint-tsgolint": "^0.8.1",
-		"prettier": "^3.6.2",
+		"oxlint": "^1.30.0",
+		"oxlint-tsgolint": "^0.8.3",
+		"prettier": "^3.7.2",
 		"prettier-plugin-svelte": "^3.4.0",
 		"prettier-plugin-tailwindcss": "^0.7.1",
 		"turbo": "^2.6.1"

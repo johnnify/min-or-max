@@ -91,7 +91,6 @@
 			}
 
 			if (isGameEvent(data)) {
-				console.info('Received game event:', data.event)
 				minOrMaxActor.send(data.event)
 			} else if (isStateSnapshot(data)) {
 				if (!isMinOrMaxSnapshot(data.state)) {

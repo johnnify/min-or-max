@@ -78,6 +78,7 @@ export type PlayingEvent =
 	| {type: 'CHOOSE_CARD'; cardId: string}
 	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
 	| {type: 'SEARCH_AND_DRAW'; rank: FaceCardRank}
+	| {type: 'SLAY_CARD'; targetPlayerId: string; targetCardId: string}
 	| {type: 'PLAY_CARD'}
 	| {type: 'END_TURN'}
 	| {type: 'SURRENDER'}
@@ -97,6 +98,7 @@ export type ClientMessage =
 	| {type: 'CHOOSE_CARD'; cardId: string}
 	| {type: 'ADD_EFFECT'; effect: ActiveEffect}
 	| {type: 'SEARCH_AND_DRAW'; rank: FaceCardRank}
+	| {type: 'SLAY_CARD'; targetPlayerId: string; targetCardId: string}
 	| {type: 'PLAY_CARD'}
 	| {type: 'END_TURN'}
 	| {type: 'SURRENDER'}

@@ -21,8 +21,8 @@
 		/>
 		<div class="text-muted-foreground text-lg font-medium sm:text-xl/8">
 			<p>
-				A <strong>multiplayer card game</strong> where you lay low or play it to
-				the max!
+				A <strong>multiplayer card game</strong> where you lay low or play it to the
+				max!
 			</p>
 		</div>
 		<div class="grid gap-4">

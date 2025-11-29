@@ -1631,6 +1631,89 @@ describe('MinOrMax Machine Tests', () => {
 						)
 					}
 				})
+
+				it('should slay an opponent card when playing a Queen', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'queen-slay-test')
+
+					const queenCard = actor
+						.getSnapshot()
+						.context.players[0].hand.find(
+							(card) => card.rank === 'Q' && card.effect?.type === 'choice',
+						)
+
+					if (queenCard) {
+						const tallyBefore = actor.getSnapshot().context.tally
+						const opponent = actor.getSnapshot().context.players[1]
+						const opponentHandBefore = opponent.hand.length
+						const cardToSlay = opponent.hand[0]
+
+						actor.send({type: 'CHOOSE_CARD', cardId: queenCard.id})
+
+						expect(actor.getSnapshot().value).toMatchObject({
+							playing: {playerTurn: 'configuringEffect'},
+						})
+
+						actor.send({
+							type: 'SLAY_CARD',
+							targetPlayerId: opponent.id,
+							targetCardId: cardToSlay.id,
+						})
+
+						actor.send({type: 'PLAY_CARD'})
+
+						const context = actor.getSnapshot().context
+						expect(context.discardPile[0].card).toEqual(queenCard)
+						expect(context.discardPile[0].playedValue).toBe(10)
+						expect(context.tally).toBe(tallyBefore + 10)
+
+						const updatedOpponent = context.players.find(
+							(p) => p.id === opponent.id,
+						)!
+						expect(updatedOpponent.hand.length).toBe(opponentHandBefore - 1)
+						expect(
+							updatedOpponent.hand.find((c) => c.id === cardToSlay.id),
+						).toBeUndefined()
+					}
+				})
+
+				it('should not allow slaying own cards with Queen', () => {
+					const actor = createActor(minOrMaxMachine)
+					actor.start()
+					transitionToPlaying(actor, 'queen-self-slay-test')
+
+					const queenCard = actor
+						.getSnapshot()
+						.context.players[0].hand.find(
+							(card) => card.rank === 'Q' && card.effect?.type === 'choice',
+						)
+
+					if (queenCard) {
+						const currentPlayer = actor.getSnapshot().context.players[0]
+						const ownCard = currentPlayer.hand.find(
+							(c) => c.id !== queenCard.id,
+						)
+
+						if (ownCard) {
+							const handBefore = currentPlayer.hand.length
+
+							actor.send({type: 'CHOOSE_CARD', cardId: queenCard.id})
+
+							actor.send({
+								type: 'SLAY_CARD',
+								targetPlayerId: currentPlayer.id,
+								targetCardId: ownCard.id,
+							})
+
+							const updatedPlayer = actor.getSnapshot().context.players[0]
+							expect(updatedPlayer.hand.length).toBe(handBefore)
+							expect(
+								updatedPlayer.hand.find((c) => c.id === ownCard.id),
+							).toBeDefined()
+						}
+					}
+				})
 			})
 		})
 

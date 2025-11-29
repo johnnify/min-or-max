@@ -20,6 +20,7 @@
 	import ChoiceDialog from './ChoiceDialog/ChoiceDialog.svelte'
 	import AceChoices from './ChoiceDialog/AceChoices.svelte'
 	import JackChoices from './ChoiceDialog/JackChoices.svelte'
+	import QueenChoices from './ChoiceDialog/QueenChoices.svelte'
 
 	type Props = {
 		gameState: MinOrMaxContext
@@ -118,6 +119,14 @@
 				sendMessage({type: 'PLAY_CARD'})
 			}}
 		/>
+	{:else if chosenCard?.rank === 'Q'}
+		<QueenChoices
+			{villains}
+			onChoice={(targetPlayerId, targetCardId) => {
+				sendMessage({type: 'SLAY_CARD', targetPlayerId, targetCardId})
+				sendMessage({type: 'PLAY_CARD'})
+			}}
+		/>
 	{:else if chosenCard?.rank === 'A'}
 		<AceChoices
 			card={chosenCard}
@@ -171,36 +180,27 @@
 			/>
 
 			{#if topDiscardCard}
-				<div class="flex items-center gap-4">
-					<DiscardPile pile={gameState.discardPile} />
-					<div class="flex flex-col items-center gap-4">
-						{#if mode === 'min'}
-							<MaxIcon class="size-32" />
-							{#if topDiscardCard.card.rank === 'A'}
-								<span
-									>play <strong>any card</strong> (ace counts as highest OR lowest)</span
-								>
-							{:else}
-								<span
-									>play <strong>{topDiscardCard.card.rank}</strong> or lower!</span
-								>
-							{/if}
+				<div class="grid gap-4 justify-items-center w-full">
+					{#if mode === 'min'}
+						{#if topDiscardCard.card.rank === 'A'}
+							<span
+								>play <strong>any card</strong> (ace counts as highest OR lowest)</span
+							>
 						{:else}
-							<MinIcon class="size-32" />
-							{#if topDiscardCard.card.rank === 'A'}
-								<span
-									>play <strong>any card</strong> (ace counts as highest OR lowest)</span
-								>
-							{:else}
-								<span
-									>play <strong>{topDiscardCard.card.rank}</strong> or higher!</span
-								>
-							{/if}
+							<span
+								>play <strong>{topDiscardCard.card.rank}</strong> or lower!</span
+							>
 						{/if}
-					</div>
-					<div
-						class="border-border aspect-5/7 w-32 border-2 border-dotted"
-					></div>
+					{:else if topDiscardCard.card.rank === 'A'}
+						<span
+							>play <strong>any card</strong> (ace counts as highest OR lowest)</span
+						>
+					{:else}
+						<span
+							>play <strong>{topDiscardCard.card.rank}</strong> or higher!</span
+						>
+					{/if}
+					<DiscardPile pile={gameState.discardPile} />
 				</div>
 			{/if}
 		</div>
